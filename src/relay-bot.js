@@ -108,6 +108,7 @@ class RelayBot {
       adapterCreator:  guild.voiceAdapterCreator,
       selfDeaf:        false,
       selfMute:        false,
+      group:           this.relayId,
     });
 
     try {

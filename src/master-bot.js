@@ -109,6 +109,7 @@ class MasterBot {
       adapterCreator: guild.voiceAdapterCreator,
       selfDeaf:       false,  // OBLIGATOIRE pour recevoir l'audio
       selfMute:       true,   // Le master ne parle pas
+      group:          'master',
     });
 
     try {
