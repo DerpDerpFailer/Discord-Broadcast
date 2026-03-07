@@ -8,14 +8,7 @@
  * - Rejoint son canal vocal cible au /start
  * - Crée un pipeline : ContinuousPCMStream → AudioResource → AudioPlayer
  * - Reçoit les frames depuis l'AudioDispatcher et les joue en temps réel
- *
- * Pipeline audio :
- *   Dispatcher.pushFrame()
- *     → ContinuousPCMStream (queue + silence)
- *     → createAudioResource(stream, { inputType: StreamType.Raw })
- *     → AudioPlayer
- *     → VoiceConnection (encode Opus interne)
- *     → Discord UDP → canal cible
+ * - S'enregistre auprès du dispatcher UNIQUEMENT quand la connexion est Ready
  */
 
 const { Client, GatewayIntentBits } = require("discord.js");
@@ -60,6 +53,7 @@ class RelayBot {
 
     this._broadcasting = false;
     this._connected    = false;
+    this._registered   = false;
   }
 
   // ── Connexion Discord ─────────────────────────────────────────────────────
@@ -111,31 +105,10 @@ class RelayBot {
       group:           this.relayId,
     });
 
-    try {
-      await entersState(this.connection, VoiceConnectionStatus.Ready, 30_000);
-      logger.info(`Connexion voice prête`, { name: this.name, channel: channel.name });
-    } catch (err) {
-      logger.warn(`Timeout connexion (normal), on continue...`, { name: this.name });
-      // Ne pas throw — la connexion finit par s'établir
-    }
+    this._broadcasting = true;
+    this._registered   = false;
 
-    // Reconnexion automatique
-    this.connection.on(VoiceConnectionStatus.Disconnected, async () => {
-      logger.warn(`Déconnecté, tentative de reconnexion`, { name: this.name });
-      try {
-        await Promise.race([
-          entersState(this.connection, VoiceConnectionStatus.Signalling, 5_000),
-          entersState(this.connection, VoiceConnectionStatus.Connecting,  5_000),
-        ]);
-      } catch {
-        logger.error(`Reconnexion échouée`, { name: this.name });
-        this.connection.destroy();
-        this._connected    = false;
-        this._broadcasting = false;
-      }
-    });
-
-    // Player audio
+    // Créer le player tout de suite
     this.player = createAudioPlayer({
       behaviors: { noSubscriber: NoSubscriberBehavior.Pause },
     });
@@ -146,21 +119,39 @@ class RelayBot {
     });
 
     this.player.on(AudioPlayerStatus.Idle, () => {
-      if (this._broadcasting) {
-        logger.warn(`Player idle, redémarrage stream`, { name: this.name });
-        this._restartStream();
-      }
+      if (this._broadcasting) this._restartStream();
     });
 
     this.connection.subscribe(this.player);
+
+    // Démarrer le stream PCM tout de suite — les frames s'accumulent en attendant Ready
     this._startStream();
 
-    this.dispatcher.registerRelay(this.relayId, this.pcmStream);
+    // S'enregistrer auprès du dispatcher UNIQUEMENT quand la connexion est Ready
+    this.connection.on("stateChange", (oldState, newState) => {
+      logger.info(`[${this.name}] ${oldState.status} -> ${newState.status}`);
 
-    this._connected    = true;
-    this._broadcasting = true;
+      if (newState.status === VoiceConnectionStatus.Ready) {
+        this._connected = true;
+        logger.info(`Connexion voice prête`, { name: this.name, channel: channel.name });
+        if (!this._registered) {
+          this._registered = true;
+          this.dispatcher.registerRelay(this.relayId, this.pcmStream);
+          logger.info(`Broadcast démarré`, { name: this.name, channel: channel.name });
+        }
+      }
 
-    logger.info(`Broadcast démarré`, { name: this.name, channel: channel.name });
+      if (newState.status === VoiceConnectionStatus.Disconnected) {
+        if (!this._broadcasting) return;
+        this._connected = false;
+        logger.warn(`Déconnecté, reconnexion...`, { name: this.name });
+        entersState(this.connection, VoiceConnectionStatus.Connecting, 5_000)
+          .catch(() => {
+            logger.warn(`Reconnexion échouée`, { name: this.name });
+            this._broadcasting = false;
+          });
+      }
+    });
   }
 
   _startStream() {
@@ -179,16 +170,18 @@ class RelayBot {
 
     this.pcmStream.start();
     this.player.play(this.resource);
-
-    if (this._broadcasting) {
-      this.dispatcher.registerRelay(this.relayId, this.pcmStream);
-    }
   }
 
   _restartStream() {
     if (!this._broadcasting) return;
     setTimeout(() => {
-      if (this._broadcasting) this._startStream();
+      if (this._broadcasting) {
+        this._startStream();
+        // Ré-enregistrer le nouveau stream auprès du dispatcher
+        if (this._registered) {
+          this.dispatcher.registerRelay(this.relayId, this.pcmStream);
+        }
+      }
     }, 250);
   }
 
@@ -196,6 +189,7 @@ class RelayBot {
     if (!this._broadcasting) return;
     this._broadcasting = false;
     this._connected    = false;
+    this._registered   = false;
 
     this.dispatcher.unregisterRelay(this.relayId);
 
@@ -231,6 +225,7 @@ class RelayBot {
       channelId:    this.channelId,
       connected:    this._connected,
       broadcasting: this._broadcasting,
+      registered:   this._registered,
       playerStatus: this.player?.state?.status ?? "none",
       queueDepth:   this.pcmStream?.queueDepth ?? 0,
     };

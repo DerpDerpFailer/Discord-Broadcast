@@ -8,20 +8,14 @@
  *   - Capturer l'audio de tous les speakers actifs (PCM s16le)
  *   - Alimenter l'AudioDispatcher frame par frame
  *   - Gérer les slash commands (/start /stop /status)
- *
- * Pipeline réception audio :
- *   Discord UDP
- *     → VoiceConnection.receiver
- *     → AudioReceiveStream (PCM via @discordjs/opus)
- *     → dispatcher.onAudioFrame(userId, pcmChunk)
  */
 
 const { Client, GatewayIntentBits, REST, Routes, Collection } = require("discord.js");
 const {
   joinVoiceChannel,
   VoiceConnectionStatus,
-  entersState,
   EndBehaviorType,
+  entersState,
 } = require("@discordjs/voice");
 
 const config = require("./config");
@@ -38,12 +32,11 @@ class MasterBot {
     this.client     = null;
     this.connection = null;
 
-    this._broadcasting   = false;
-    this._activeSpeakers = new Set();
-    this._speakerTimers  = new Map();
-
-    // Référence vers les relay bots (injectée depuis index.js)
-    this._relayBots = [];
+    this._broadcasting    = false;
+    this._receiverStarted = false;
+    this._activeSpeakers  = new Set();
+    this._speakerTimers   = new Map();
+    this._relayBots       = [];
 
     this.commands = new Collection();
     this.commands.set("start",  startCmd);
@@ -107,37 +100,38 @@ class MasterBot {
       channelId:      channel.id,
       guildId:        guild.id,
       adapterCreator: guild.voiceAdapterCreator,
-      selfDeaf:       false,  // OBLIGATOIRE pour recevoir l'audio
-      selfMute:       true,   // Le master ne parle pas
-      group:          'master',
+      selfDeaf:       false,
+      selfMute:       true,
+      group:          "master",
     });
 
-    try {
-      await entersState(this.connection, VoiceConnectionStatus.Ready, 30_000);
-      logger.info("Connexion voice source prête", { channel: channel.name });
-    } catch (err) {
-      logger.warn("Timeout connexion source (normal), on continue...", { channel: channel.name });
-      // Ne pas throw — la connexion finit par s'établir
-    }
+    this._broadcasting    = true;
+    this._receiverStarted = false;
 
-    this.connection.on(VoiceConnectionStatus.Disconnected, async () => {
-      logger.warn("Source déconnectée, reconnexion...");
-      try {
-        await Promise.race([
-          entersState(this.connection, VoiceConnectionStatus.Signalling, 5_000),
-          entersState(this.connection, VoiceConnectionStatus.Connecting,  5_000),
-        ]);
-      } catch {
-        logger.error("Reconnexion source échouée. Arrêt du broadcast.");
-        await this.stopBroadcast();
+    // Écouter les changements d'état — démarrer la réception dès que Ready
+    this.connection.on("stateChange", (oldState, newState) => {
+      logger.info(`Connexion source : ${oldState.status} -> ${newState.status}`);
+
+      if (newState.status === VoiceConnectionStatus.Ready) {
+        logger.info("Connexion voice source prête", { channel: channel.name });
+        if (!this._receiverStarted) {
+          this._receiverStarted = true;
+          this.dispatcher.start();
+          this._startReceiving();
+          logger.info(`Broadcast actif`, { source: channel.name });
+        }
+      }
+
+      if (newState.status === VoiceConnectionStatus.Disconnected) {
+        if (!this._broadcasting) return;
+        logger.warn("Source déconnectée, reconnexion...");
+        entersState(this.connection, VoiceConnectionStatus.Connecting, 5_000)
+          .catch(() => {
+            logger.error("Reconnexion source échouée. Arrêt du broadcast.");
+            this.stopBroadcast();
+          });
       }
     });
-
-    this.dispatcher.start();
-    this._startReceiving();
-    this._broadcasting = true;
-
-    logger.info(`Broadcast actif`, { source: channel.name });
   }
 
   _startReceiving() {
@@ -147,13 +141,11 @@ class MasterBot {
       if (this._activeSpeakers.has(userId)) return;
       this._activeSpeakers.add(userId);
 
-      // Annuler le timer de silence si l'utilisateur reprend
       if (this._speakerTimers.has(userId)) {
         clearTimeout(this._speakerTimers.get(userId));
         this._speakerTimers.delete(userId);
       }
 
-      // Souscrire au flux audio de cet utilisateur
       const audioStream = receiver.subscribe(userId, {
         end: {
           behavior: EndBehaviorType.AfterSilence,
@@ -189,7 +181,8 @@ class MasterBot {
 
   async stopBroadcast() {
     if (!this._broadcasting) return;
-    this._broadcasting = false;
+    this._broadcasting    = false;
+    this._receiverStarted = false;
 
     for (const [, t] of this._speakerTimers) clearTimeout(t);
     this._speakerTimers.clear();
