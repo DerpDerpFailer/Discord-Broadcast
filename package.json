@@ -1,0 +1,27 @@
+{
+  "name": "discord-broadcast",
+  "version": "1.0.0",
+  "description": "Real-time Discord voice broadcast — 1 source to N channels",
+  "main": "src/index.js",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "scripts": {
+    "start": "node src/index.js",
+    "register": "node scripts/register-commands.js",
+    "test": "node --test tests/test-audio.js tests/test-dispatcher.js",
+    "test:audio": "node --test tests/test-audio.js",
+    "test:dispatcher": "node --test tests/test-dispatcher.js",
+    "bench": "node tests/bench-latency.js"
+  },
+  "dependencies": {
+    "discord.js": "^14.14.1",
+    "@discordjs/voice": "^0.17.0",
+    "@discordjs/opus": "^0.9.0",
+    "prism-media": "^1.3.5",
+    "sodium-native": "^4.0.1",
+    "ffmpeg-static": "^5.2.0",
+    "winston": "^3.11.0"
+  },
+  "license": "MIT"
+}
