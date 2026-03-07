@@ -4,12 +4,15 @@ FROM node:20-bookworm-slim AS builder
 WORKDIR /app
 
 # Build tools needed to compile native addons:
-#   - sodium-native  (libsodium bindings)
-#   - @discordjs/opus (Opus codec bindings)
+#   - sodium-native  → nécessite libsodium-dev pour compiler les bindings C
+#   - @discordjs/opus → nécessite build-essential pour les bindings Opus
 RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 \
     make \
     g++ \
+    gcc \
+    libsodium-dev \
+    build-essential \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy package files first (layer cache optimisation)
