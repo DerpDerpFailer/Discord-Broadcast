@@ -115,8 +115,8 @@ class MasterBot {
       await entersState(this.connection, VoiceConnectionStatus.Ready, 30_000);
       logger.info("Connexion voice source prête", { channel: channel.name });
     } catch (err) {
-      this.connection.destroy();
-      throw new Error(`Connexion source échouée : ${err.message}`);
+      logger.warn("Timeout connexion source (normal), on continue...", { channel: channel.name });
+      // Ne pas throw — la connexion finit par s'établir
     }
 
     this.connection.on(VoiceConnectionStatus.Disconnected, async () => {

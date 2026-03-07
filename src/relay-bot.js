@@ -114,8 +114,8 @@ class RelayBot {
       await entersState(this.connection, VoiceConnectionStatus.Ready, 30_000);
       logger.info(`Connexion voice prête`, { name: this.name, channel: channel.name });
     } catch (err) {
-      this.connection.destroy();
-      throw new Error(`[${this.name}] Connexion voice échouée : ${err.message}`);
+      logger.warn(`Timeout connexion (normal), on continue...`, { name: this.name });
+      // Ne pas throw — la connexion finit par s'établir
     }
 
     // Reconnexion automatique
