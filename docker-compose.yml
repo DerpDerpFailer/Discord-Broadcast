@@ -34,7 +34,9 @@ services:
           memory: 128M
 
     # Réseau host = latence UDP optimale pour Discord voice
-    network_mode: host
+    # network_mode: host
+    ports:
+      - "0:0/udp"  # UDP dynamique pour Discord voice
 
     environment:
       # ── OBLIGATOIRES ────────────────────────────────────────────────────────
