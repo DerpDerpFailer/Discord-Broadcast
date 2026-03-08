@@ -21,12 +21,12 @@ Système de broadcast vocal Discord en temps réel : **1 canal source → jusqu'
 src/
 ├── index.js              ← Point d'entrée, câble tout
 ├── config.js             ← Lit les variables d'environnement
-├── dispatcher.js         ← Routage audio (cœur du système)
-├── master-bot.js         ← Capture audio + gestion commandes
+├── dispatcher.js         ← Tick unique 20ms, mixage + dispatch audio
+├── master-bot.js         ← Capture audio Opus→PCM + gestion commandes
 ├── relay-bot.js          ← Lecture audio dans canal cible
 ├── voice/
-│   ├── audio-stream.js   ← ContinuousPCMStream (horloge 20ms)
-│   └── mixer.js          ← Mixage PCM multi-speakers
+│   ├── audio-stream.js   ← ContinuousPCMStream (stream passif, pas de timer)
+│   └── mixer.js          ← Mixage PCM multi-speakers avec clamping int16
 ├── commands/
 │   ├── start.js          ← /start
 │   ├── stop.js           ← /stop
@@ -34,6 +34,14 @@ src/
 └── utils/
     └── logger.js         ← Winston structuré
 ```
+
+### Principes clés
+
+- **Un seul processus Node.js** — tous les bots tournent ensemble, zéro IPC, zéro latence inter-bots
+- **Un seul timer** — le dispatcher cadence tout à 20ms, les streams sont passifs (pas de double timer)
+- **Pipeline audio** — Discord Opus → prism.opus.Decoder → PCM s16le 48kHz stéréo → Dispatcher → Relay bots
+- **group voice unique** — chaque bot joinVoiceChannel avec son propre `group` pour éviter les collisions dans le même serveur
+- **@snazzah/davey** — requis pour la compatibilité avec le nouveau chiffrement Discord voice (aead_xchacha20_poly1305_rtpsize)
 
 ## Prérequis
 
@@ -131,10 +139,23 @@ Dans Discord (avec le rôle Shotcaller) :
 | `RELAY_BOT_NAME_N` | `Relay N` | Optionnel |
 | `FRAME_DURATION_MS` | `20` | Ne pas modifier |
 | `PCM_FRAME_SIZE` | `3840` | Ne pas modifier |
-| `JITTER_BUFFER_FRAMES` | `2` | Augmenter si audio saccadé |
-| `MAX_BUFFER_FRAMES` | `25` | Taille max queue |
-| `SILENCE_THRESHOLD_MS` | `150` | Détection silence |
+| `JITTER_BUFFER_FRAMES` | `2` | Non utilisé (architecture passif) |
+| `MAX_BUFFER_FRAMES` | `25` | Taille max queue par speaker |
+| `SILENCE_THRESHOLD_MS` | `1000` | Délai silence avant arrêt du pipeline |
 | `LOG_LEVEL` | `info` | `error/warn/info/debug` |
+
+## Notes de déploiement importantes
+
+### Réseau
+- `network_mode: host` est requis dans `docker-compose.yml` — ne pas utiliser le bridge Docker
+- Aucune redirection de port nécessaire — toutes les connexions sont sortantes vers Discord
+- Pas besoin de DMZ
+
+### Connexion voice
+Les bots peuvent mettre jusqu'à 60 secondes pour établir la connexion voice (normal sur certains réseaux). Le système attend automatiquement l'événement `Ready` sans timeout bloquant.
+
+### Chiffrement Discord
+Discord impose depuis 2025 le mode `aead_xchacha20_poly1305_rtpsize`. Le package `@snazzah/davey` est requis pour la compatibilité — il est inclus dans `package.json`.
 
 ## Tests
 
