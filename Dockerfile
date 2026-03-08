@@ -43,6 +43,10 @@ COPY scripts/         ./scripts/
 
 # Run as non-root user
 RUN groupadd -r discord && useradd -r -g discord discord
+
+# Créer /data et donner les droits à l'utilisateur discord
+RUN mkdir -p /data && chown discord:discord /data
+
 USER discord
 
 # Basic liveness check
