@@ -183,12 +183,36 @@ class MasterBot {
     }, delay);
   }
 
+  /**
+   * Vérifie si un userId a le rôle Shotcaller sur le serveur.
+   * Si le rôle n'est pas configuré, tout le monde est autorisé.
+   */
+  async _hasShotcallerRole(guild, userId) {
+    if (!config.shotcallerRoleId) return true;
+    try {
+      const member = guild.members.cache.get(userId)
+        ?? await guild.members.fetch(userId);
+      return member.roles.cache.has(config.shotcallerRoleId);
+    } catch {
+      return false;
+    }
+  }
+
   _startReceiving() {
     const receiver = this.connection.receiver;
     const prism = require("prism-media");
 
-    receiver.speaking.on("start", (userId) => {
+    receiver.speaking.on("start", async (userId) => {
       if (this._activeSpeakers.has(userId)) return;
+
+      // Vérifier le rôle Shotcaller avant de broadcasté
+      const guild        = this.client.guilds.cache.get(config.guildId);
+      const isAuthorized = await this._hasShotcallerRole(guild, userId);
+      if (!isAuthorized) {
+        logger.debug(`Speaker ignoré (pas Shotcaller)`, { userId });
+        return;
+      }
+
       this._activeSpeakers.add(userId);
 
       if (this._speakerTimers.has(userId)) {
@@ -308,19 +332,54 @@ class MasterBot {
     const command = this.commands.get(interaction.commandName);
     if (!command) return;
 
-    const configuredRole  = interaction.guild?.roles?.cache?.get(config.shotcallerRoleId);
-    const roleExistsHere  = !!configuredRole;
+    // ── /setup : réservé aux Administrateurs Discord ─────────────────
+    if (interaction.commandName === "setup") {
+      const isAdmin = interaction.member?.permissions?.has("Administrator");
+      if (!isAdmin) {
+        await interaction.reply({
+          content:   "❌ Seuls les **Administrateurs** du serveur peuvent utiliser `/setup`.",
+          ephemeral: true,
+        });
+        return;
+      }
+      try {
+        await command.execute(interaction, this);
+      } catch (err) {
+        logger.error("Erreur commande setup", { error: err.message });
+        const msg = { content: `❌ Erreur : ${err.message}`, ephemeral: true };
+        if (interaction.replied || interaction.deferred) {
+          await interaction.followUp(msg).catch(() => {});
+        } else {
+          await interaction.reply(msg).catch(() => {});
+        }
+      }
+      return;
+    }
 
-    // Si le rôle configuré n'existe pas sur ce serveur → fallback Administrator
-    // (permet de bootstrapper /setup sur un nouveau serveur sans chicken-and-egg)
-    const hasRole = roleExistsHere
-      ? interaction.member?.roles?.cache?.has(config.shotcallerRoleId)
-      : interaction.member?.permissions?.has("Administrator");
+    // ── /start /stop /status : Shotcaller OU Staff ──────────────────
+    const shotcallerRole = interaction.guild?.roles?.cache?.get(config.shotcallerRoleId);
+    const staffRole      = config.staffRoleId
+      ? interaction.guild?.roles?.cache?.get(config.staffRoleId)
+      : null;
+
+    const hasShotcaller = interaction.member?.roles?.cache?.has(config.shotcallerRoleId);
+    const hasStaff      = staffRole
+      ? interaction.member?.roles?.cache?.has(config.staffRoleId)
+      : false;
+
+    // Si aucun rôle n'existe sur ce serveur → fallback Administrator (bootstrap)
+    const noRolesConfigured = !shotcallerRole && !staffRole;
+    const hasRole = hasShotcaller || hasStaff ||
+      (noRolesConfigured && interaction.member?.permissions?.has("Administrator"));
 
     if (!hasRole) {
-      const hint = roleExistsHere
-        ? `Vous devez avoir le rôle **${configuredRole.name}** pour utiliser cette commande.`
-        : `Aucun rôle autorisé configuré sur ce serveur.\nUtilisez \`/setup\` en tant qu'**Administrateur** pour en définir un.`;
+      const roleNames = [
+        shotcallerRole?.name,
+        staffRole?.name,
+      ].filter(Boolean).map((n) => `**${n}**`).join(" ou ");
+      const hint = roleNames
+        ? `Vous devez avoir le rôle ${roleNames} pour utiliser cette commande.`
+        : `Aucun rôle autorisé configuré.\nUtilisez \`/setup\` pour en définir un.`;
       await interaction.reply({ content: `❌ ${hint}`, ephemeral: true });
       return;
     }

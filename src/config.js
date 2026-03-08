@@ -57,6 +57,7 @@ const config = {
   guildId:          process.env.GUILD_ID,
   sourceChannelId:  process.env.SOURCE_CHANNEL_ID,
   shotcallerRoleId: process.env.SHOTCALLER_ROLE_ID,
+  staffRoleId:      process.env.STAFF_ROLE_ID || null,
 
   // Bots relais (parsés automatiquement depuis RELAY_BOT_TOKEN_1..N)
   relayBots: parseRelayBots(),
@@ -87,6 +88,7 @@ try {
 
   if (saved.sourceChannelId)  config.sourceChannelId  = saved.sourceChannelId;
   if (saved.shotcallerRoleId) config.shotcallerRoleId = saved.shotcallerRoleId;
+  if (saved.staffRoleId)      config.staffRoleId      = saved.staffRoleId;
 
   if (Array.isArray(saved.relayBots)) {
     saved.relayBots.forEach((b, i) => {
