@@ -26,6 +26,9 @@ const {
 const ContinuousPCMStream = require("./voice/audio-stream");
 const logger = require("./utils/logger").child("RelayBot");
 
+// Backoff exponentiel : 2s, 4s, 8s, 16s, 30s max
+const RECONNECT_DELAYS = [2000, 4000, 8000, 16000, 30000];
+
 class RelayBot {
   /**
    * @param {object} opts
@@ -51,9 +54,11 @@ class RelayBot {
     this.pcmStream  = null;
     this.resource   = null;
 
-    this._broadcasting = false;
-    this._connected    = false;
-    this._registered   = false;
+    this._broadcasting      = false;
+    this._connected         = false;
+    this._registered        = false;
+    this._reconnectAttempts = 0;
+    this._reconnectTimer    = null;
   }
 
   // ── Connexion Discord ─────────────────────────────────────────────────────
@@ -96,19 +101,17 @@ class RelayBot {
 
     logger.info(`Connexion au canal`, { name: this.name, channel: channel.name });
 
-    this.connection = joinVoiceChannel({
-      channelId:       channel.id,
-      guildId:         guild.id,
-      adapterCreator:  guild.voiceAdapterCreator,
-      selfDeaf:        false,
-      selfMute:        false,
-      group:           this.relayId,
-    });
+    this._broadcasting      = true;
+    this._registered        = false;
+    this._reconnectAttempts = 0;
 
-    this._broadcasting = true;
-    this._registered   = false;
+    this._setupPlayer();
+    this._setupConnection(channel);
+  }
 
-    // Créer le player tout de suite
+  _setupPlayer() {
+    if (this.player) return;
+
     this.player = createAudioPlayer({
       behaviors: { noSubscriber: NoSubscriberBehavior.Pause },
     });
@@ -121,18 +124,32 @@ class RelayBot {
     this.player.on(AudioPlayerStatus.Idle, () => {
       if (this._broadcasting) this._restartStream();
     });
+  }
+
+  _setupConnection(channel) {
+    if (this.connection) {
+      try { this.connection.destroy(); } catch {}
+      this.connection = null;
+    }
+
+    this.connection = joinVoiceChannel({
+      channelId:      channel.id,
+      guildId:        channel.guild.id,
+      adapterCreator: channel.guild.voiceAdapterCreator,
+      selfDeaf:       false,
+      selfMute:       false,
+      group:          this.relayId,
+    });
 
     this.connection.subscribe(this.player);
-
-    // Démarrer le stream PCM tout de suite — les frames s'accumulent en attendant Ready
     this._startStream();
 
-    // S'enregistrer auprès du dispatcher UNIQUEMENT quand la connexion est Ready
     this.connection.on("stateChange", (oldState, newState) => {
       logger.info(`[${this.name}] ${oldState.status} -> ${newState.status}`);
 
       if (newState.status === VoiceConnectionStatus.Ready) {
-        this._connected = true;
+        this._connected         = true;
+        this._reconnectAttempts = 0;
         logger.info(`Connexion voice prête`, { name: this.name, channel: channel.name });
         if (!this._registered) {
           this._registered = true;
@@ -141,17 +158,52 @@ class RelayBot {
         }
       }
 
-      if (newState.status === VoiceConnectionStatus.Disconnected) {
+      if (
+        newState.status === VoiceConnectionStatus.Disconnected ||
+        newState.status === VoiceConnectionStatus.Destroyed
+      ) {
         if (!this._broadcasting) return;
-        this._connected = false;
-        logger.warn(`Déconnecté, reconnexion...`, { name: this.name });
-        entersState(this.connection, VoiceConnectionStatus.Connecting, 5_000)
-          .catch(() => {
-            logger.warn(`Reconnexion échouée`, { name: this.name });
-            this._broadcasting = false;
-          });
+        this._connected  = false;
+        this._registered = false;
+        this.dispatcher.unregisterRelay(this.relayId);
+        logger.warn(`Déconnecté [${newState.status}]`, { name: this.name });
+        this._scheduleReconnect(channel);
       }
     });
+  }
+
+  _scheduleReconnect(channel) {
+    if (!this._broadcasting) return;
+    if (this._reconnectTimer) return;
+
+    const attempt = this._reconnectAttempts;
+    const delay   = RECONNECT_DELAYS[Math.min(attempt, RECONNECT_DELAYS.length - 1)];
+
+    logger.info(`Reconnexion dans ${delay / 1000}s (tentative ${attempt + 1})`, { name: this.name });
+
+    this._reconnectTimer = setTimeout(async () => {
+      this._reconnectTimer    = null;
+      this._reconnectAttempts = attempt + 1;
+
+      if (!this._broadcasting) return;
+
+      // Tentative de reconnexion rapide sur la connexion existante
+      try {
+        if (
+          this.connection &&
+          this.connection.state.status !== VoiceConnectionStatus.Destroyed
+        ) {
+          await entersState(this.connection, VoiceConnectionStatus.Ready, 10_000);
+          logger.info(`Reconnexion rapide réussie`, { name: this.name });
+          return;
+        }
+      } catch {
+        logger.warn(`Reconnexion rapide échouée, reconnexion complète...`, { name: this.name });
+      }
+
+      // Reconnexion complète — rejoindre à nouveau le canal
+      this._setupConnection(channel);
+    }, delay);
   }
 
   _startStream() {
@@ -191,6 +243,11 @@ class RelayBot {
     this._connected    = false;
     this._registered   = false;
 
+    if (this._reconnectTimer) {
+      clearTimeout(this._reconnectTimer);
+      this._reconnectTimer = null;
+    }
+
     this.dispatcher.unregisterRelay(this.relayId);
 
     if (this.pcmStream) {
@@ -221,13 +278,14 @@ class RelayBot {
 
   getStatus() {
     return {
-      name:         this.name,
-      channelId:    this.channelId,
-      connected:    this._connected,
-      broadcasting: this._broadcasting,
-      registered:   this._registered,
-      playerStatus: this.player?.state?.status ?? "none",
-      queueDepth:   this.pcmStream?.queueDepth ?? 0,
+      name:              this.name,
+      channelId:         this.channelId,
+      connected:         this._connected,
+      broadcasting:      this._broadcasting,
+      registered:        this._registered,
+      reconnectAttempts: this._reconnectAttempts,
+      playerStatus:      this.player?.state?.status ?? "none",
+      queueDepth:        this.pcmStream?.queueDepth ?? 0,
     };
   }
 }

@@ -26,6 +26,9 @@ const stopCmd   = require("./commands/stop");
 const statusCmd = require("./commands/status");
 const setupCmd  = require("./commands/setup");
 
+// Backoff exponentiel : 2s, 4s, 8s, 16s, 30s max
+const RECONNECT_DELAYS = [2000, 4000, 8000, 16000, 30000];
+
 class MasterBot {
   /** @param {import('./dispatcher')} dispatcher */
   constructor(dispatcher) {
@@ -33,11 +36,13 @@ class MasterBot {
     this.client     = null;
     this.connection = null;
 
-    this._broadcasting    = false;
-    this._receiverStarted = false;
-    this._activeSpeakers  = new Set();
-    this._speakerTimers   = new Map();
-    this._relayBots       = [];
+    this._broadcasting      = false;
+    this._receiverStarted   = false;
+    this._activeSpeakers    = new Set();
+    this._speakerTimers     = new Map();
+    this._relayBots         = [];
+    this._reconnectAttempts = 0;
+    this._reconnectTimer    = null;
 
     this.commands = new Collection();
     this.commands.set("start",  startCmd);
@@ -98,23 +103,33 @@ class MasterBot {
 
     logger.info(`Connexion au canal source`, { channel: channel.name });
 
+    this._broadcasting      = true;
+    this._receiverStarted   = false;
+    this._reconnectAttempts = 0;
+
+    this._setupConnection(channel);
+  }
+
+  _setupConnection(channel) {
+    if (this.connection) {
+      try { this.connection.destroy(); } catch {}
+      this.connection = null;
+    }
+
     this.connection = joinVoiceChannel({
       channelId:      channel.id,
-      guildId:        guild.id,
-      adapterCreator: guild.voiceAdapterCreator,
+      guildId:        channel.guild.id,
+      adapterCreator: channel.guild.voiceAdapterCreator,
       selfDeaf:       false,
       selfMute:       true,
       group:          "master",
     });
 
-    this._broadcasting    = true;
-    this._receiverStarted = false;
-
-    // Écouter les changements d'état — démarrer la réception dès que Ready
     this.connection.on("stateChange", (oldState, newState) => {
       logger.info(`Connexion source : ${oldState.status} -> ${newState.status}`);
 
       if (newState.status === VoiceConnectionStatus.Ready) {
+        this._reconnectAttempts = 0;
         logger.info("Connexion voice source prête", { channel: channel.name });
         if (!this._receiverStarted) {
           this._receiverStarted = true;
@@ -124,16 +139,48 @@ class MasterBot {
         }
       }
 
-      if (newState.status === VoiceConnectionStatus.Disconnected) {
+      if (
+        newState.status === VoiceConnectionStatus.Disconnected ||
+        newState.status === VoiceConnectionStatus.Destroyed
+      ) {
         if (!this._broadcasting) return;
-        logger.warn("Source déconnectée, reconnexion...");
-        entersState(this.connection, VoiceConnectionStatus.Connecting, 5_000)
-          .catch(() => {
-            logger.error("Reconnexion source échouée. Arrêt du broadcast.");
-            this.stopBroadcast();
-          });
+        logger.warn(`Source ${newState.status}, reconnexion...`);
+        this._scheduleReconnect(channel);
       }
     });
+  }
+
+  _scheduleReconnect(channel) {
+    if (!this._broadcasting) return;
+    if (this._reconnectTimer) return;
+
+    const attempt = this._reconnectAttempts;
+    const delay   = RECONNECT_DELAYS[Math.min(attempt, RECONNECT_DELAYS.length - 1)];
+
+    logger.info(`Reconnexion source dans ${delay / 1000}s (tentative ${attempt + 1})`);
+
+    this._reconnectTimer = setTimeout(async () => {
+      this._reconnectTimer    = null;
+      this._reconnectAttempts = attempt + 1;
+
+      if (!this._broadcasting) return;
+
+      try {
+        if (
+          this.connection &&
+          this.connection.state.status !== VoiceConnectionStatus.Destroyed
+        ) {
+          await entersState(this.connection, VoiceConnectionStatus.Ready, 10_000);
+          logger.info(`Reconnexion source rapide réussie`);
+          return;
+        }
+      } catch {
+        logger.warn(`Reconnexion rapide échouée, reconnexion complète...`);
+      }
+
+      this._receiverStarted = false;
+      this._setupConnection(channel);
+    }, delay);
   }
 
   _startReceiving() {
@@ -214,6 +261,11 @@ class MasterBot {
     this._broadcasting    = false;
     this._receiverStarted = false;
 
+    if (this._reconnectTimer) {
+      clearTimeout(this._reconnectTimer);
+      this._reconnectTimer = null;
+    }
+
     for (const [, t] of this._speakerTimers) clearTimeout(t);
     this._speakerTimers.clear();
     this._activeSpeakers.clear();
@@ -291,9 +343,10 @@ class MasterBot {
 
   getStatus() {
     return {
-      broadcasting:     this._broadcasting,
-      activeSpeakers:   [...this._activeSpeakers],
-      connectionStatus: this.connection?.state?.status ?? "disconnected",
+      broadcasting:      this._broadcasting,
+      activeSpeakers:    [...this._activeSpeakers],
+      connectionStatus:  this.connection?.state?.status ?? "disconnected",
+      reconnectAttempts: this._reconnectAttempts,
     };
   }
 
