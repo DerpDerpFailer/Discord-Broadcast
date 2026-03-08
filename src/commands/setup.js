@@ -16,9 +16,7 @@ const {
   ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
-  ChannelSelectMenuBuilder,
   RoleSelectMenuBuilder,
-  ChannelType,
   EmbedBuilder,
   ModalBuilder,
   TextInputBuilder,
@@ -105,11 +103,23 @@ module.exports = {
       return interaction.update(buildMessage(state, userId, relays.length));
     }
 
-    // Étape 1 — Sélection du canal source
+    // Étape 1 — Sélection du canal source (ouvre une modale)
     if (action === "src_channel") {
-      state.sourceChannelId = interaction.values[0];
-      state.step = 2;
-      return interaction.update(buildMessage(state, userId, relays.length));
+      const modal = new ModalBuilder()
+        .setCustomId(`setup_modal:src_channel:${userId}`)
+        .setTitle("Canal source");
+      modal.addComponents(
+        new ActionRowBuilder().addComponents(
+          new TextInputBuilder()
+            .setCustomId("channel_id")
+            .setLabel("ID du canal vocal source")
+            .setStyle(TextInputStyle.Short)
+            .setPlaceholder("Ex: 1234567890123456789")
+            .setValue(state.sourceChannelId || "")
+            .setRequired(true)
+        )
+      );
+      return interaction.showModal(modal);
     }
 
     // Étape 2 — Sélection du rôle
@@ -120,10 +130,24 @@ module.exports = {
       return interaction.update(buildMessage(state, userId, relays.length));
     }
 
-    // Étape 3 — Canal cible du relay courant
+    // Étape 3 — Canal cible du relay courant (ouvre une modale)
     if (action === "relay_channel") {
-      state.relayBots[state.currentRelayIndex].channelId = interaction.values[0];
-      return interaction.update(buildMessage(state, userId, relays.length));
+      const idx = state.currentRelayIndex;
+      const modal = new ModalBuilder()
+        .setCustomId(`setup_modal:relay_channel:${userId}`)
+        .setTitle(`Canal cible — Relay bot ${idx + 1}`);
+      modal.addComponents(
+        new ActionRowBuilder().addComponents(
+          new TextInputBuilder()
+            .setCustomId("channel_id")
+            .setLabel("ID du canal vocal cible")
+            .setStyle(TextInputStyle.Short)
+            .setPlaceholder("Ex: 1234567890123456789")
+            .setValue(state.relayBots[idx].channelId || "")
+            .setRequired(true)
+        )
+      );
+      return interaction.showModal(modal);
     }
 
     // Étape 3 — Modifier le nom du relay courant (ouvre une modale)
@@ -230,14 +254,50 @@ module.exports = {
       return interaction.reply({ content: "❌ Session expirée. Relancez `/setup`.", ephemeral: true });
     }
 
+    // Canal source
+    if (action === "src_channel") {
+      const channelId = interaction.fields.getTextInputValue("channel_id").trim();
+      // Valider que le canal existe
+      try {
+        const guild   = interaction.guild;
+        const channel = await guild.channels.fetch(channelId);
+        if (!channel?.isVoiceBased()) {
+          return interaction.reply({ content: "❌ Ce canal n'est pas un canal vocal.", ephemeral: true });
+        }
+        state.sourceChannelId = channelId;
+        state.step = 2;
+      } catch {
+        return interaction.reply({ content: "❌ ID de canal introuvable. Vérifiez l'ID et réessayez.", ephemeral: true });
+      }
+      await interaction.deferUpdate();
+      await interaction.editReply(buildMessage(state, userId, masterBot._relayBots.length));
+      return;
+    }
+
+    // Canal cible relay
+    if (action === "relay_channel") {
+      const channelId = interaction.fields.getTextInputValue("channel_id").trim();
+      try {
+        const guild   = interaction.guild;
+        const channel = await guild.channels.fetch(channelId);
+        if (!channel?.isVoiceBased()) {
+          return interaction.reply({ content: "❌ Ce canal n'est pas un canal vocal.", ephemeral: true });
+        }
+        state.relayBots[state.currentRelayIndex].channelId = channelId;
+      } catch {
+        return interaction.reply({ content: "❌ ID de canal introuvable. Vérifiez l'ID et réessayez.", ephemeral: true });
+      }
+      await interaction.deferUpdate();
+      await interaction.editReply(buildMessage(state, userId, masterBot._relayBots.length));
+      return;
+    }
+
+    // Nom du relay bot
     if (action === "name") {
       state.relayBots[state.currentRelayIndex].name =
         interaction.fields.getTextInputValue("name");
-
       await interaction.deferUpdate();
-      await interaction.editReply(
-        buildMessage(state, userId, masterBot._relayBots.length)
-      );
+      await interaction.editReply(buildMessage(state, userId, masterBot._relayBots.length));
     }
   },
 };
@@ -288,7 +348,11 @@ function buildSourceChannel(state, userId) {
       new EmbedBuilder()
         .setTitle("⚙️ Étape 1/3 — Canal source")
         .setColor(0x5865f2)
-        .setDescription("Sélectionnez le canal vocal où les Shotcallers parlent.")
+        .setDescription(
+          "Cliquez sur **Choisir le canal** et entrez l'ID du canal vocal source." +
+          "\n\nPour copier un ID : clic droit sur le canal > Copier identifiant" +
+          "\n*(Mode developpeur requis : Parametres Discord > Avances)*"
+        )
         .addFields({
           name:  "Canal actuel",
           value: state.sourceChannelId ? `<#${state.sourceChannelId}>` : "_Non configuré_",
@@ -296,12 +360,11 @@ function buildSourceChannel(state, userId) {
     ],
     components: [
       new ActionRowBuilder().addComponents(
-        new ChannelSelectMenuBuilder()
+        new ButtonBuilder()
           .setCustomId(`setup:src_channel:${userId}`)
-          .setPlaceholder("Choisir le canal source...")
-          .addChannelTypes(ChannelType.GuildVoice)
-      ),
-      new ActionRowBuilder().addComponents(
+          .setLabel("Choisir le canal")
+          .setStyle(ButtonStyle.Primary)
+          .setEmoji("📥"),
         new ButtonBuilder()
           .setCustomId(`setup:cancel:${userId}`)
           .setLabel("Annuler")
@@ -371,10 +434,16 @@ function buildRelayBot(state, userId, relayCount) {
     ],
     components: [
       new ActionRowBuilder().addComponents(
-        new ChannelSelectMenuBuilder()
+        new ButtonBuilder()
           .setCustomId(`setup:relay_channel:${userId}`)
-          .setPlaceholder("Choisir le canal cible...")
-          .addChannelTypes(ChannelType.GuildVoice)
+          .setLabel("Choisir le canal")
+          .setStyle(ButtonStyle.Primary)
+          .setEmoji("📢"),
+        new ButtonBuilder()
+          .setCustomId(`setup:relay_name:${userId}`)
+          .setLabel("Modifier le nom")
+          .setStyle(ButtonStyle.Secondary)
+          .setEmoji("✏️"),
       ),
       new ActionRowBuilder().addComponents(
         new ButtonBuilder()
@@ -382,11 +451,6 @@ function buildRelayBot(state, userId, relayCount) {
           .setLabel("Précédent")
           .setStyle(ButtonStyle.Secondary)
           .setEmoji("◀️"),
-        new ButtonBuilder()
-          .setCustomId(`setup:relay_name:${userId}`)
-          .setLabel("Modifier le nom")
-          .setStyle(ButtonStyle.Secondary)
-          .setEmoji("✏️"),
         new ButtonBuilder()
           .setCustomId(`setup:next:${userId}`)
           .setLabel(isLast ? "Récapitulatif →" : "Suivant →")
