@@ -420,7 +420,7 @@ function buildWelcome(userId) {
           "2️⃣  Rôle Shotcaller — peut parler + gérer le bot\n" +
           "3️⃣  Rôle Staff — peut gérer le bot (optionnel)\n" +
           "4️⃣  Salon d'alertes (optionnel)\n" +
-          "5️⃣  Canal cible de chaque relay bot"
+          "520e3  Canal cible de chaque relay bot"
         ),
     ],
     components: [
@@ -700,7 +700,8 @@ function buildSummary(state, userId, relayCount) {
         .addFields(
           { name: "📥 Canal source",     value: state.sourceChannelId ? `<#${state.sourceChannelId}>` : "❌ Non configuré" },
           { name: "🎤 Rôle Shotcaller",  value: state.roleId          ? `<@&${state.roleId}>`         : "❌ Non configuré" },
-          { name: "🛡️ Rôle Staff",      value: state.staffRoleId     ? `<@&${state.staffRoleId}>`    : "_Aucun_" },
+          { name: "🛡️ Rôle Staff",      value: state.staffRoleId    ? `<@&${state.staffRoleId}>`   : "_Aucun_" },
+          { name: "🔔 Salon d'alertes",  value: state.alertChannelId ? `<#${state.alertChannelId}>` : "_Aucun_" },
           { name: "📢 Relay bots",       value: relayLines || "_Aucun_" }
         ),
     ],
