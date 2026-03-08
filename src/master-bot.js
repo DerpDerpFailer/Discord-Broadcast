@@ -162,22 +162,13 @@ class MasterBot {
         frameSize: 960,
       });
 
-      // Accumulateur — assure des frames exactement de pcmFrameSize bytes
-      let pcmBuffer = Buffer.alloc(0);
-
       // Pipeline : Opus → Decoder → PCM → Dispatcher
       opusStream.pipe(decoder);
 
       decoder.on("data", (pcmChunk) => {
-        // Accumule les chunks de taille variable
-        pcmBuffer = Buffer.concat([pcmBuffer, pcmChunk]);
-
-        // Envoie uniquement des frames complètes de pcmFrameSize bytes
-        while (pcmBuffer.length >= config.pcmFrameSize) {
-          const frame = pcmBuffer.slice(0, config.pcmFrameSize);
-          pcmBuffer = pcmBuffer.slice(config.pcmFrameSize);
-          this.dispatcher.onAudioFrame(userId, frame);
-        }
+        // Le décodeur Opus produit exactement 3840 bytes par frame (960 samples × 2ch × 2bytes)
+        // Envoi direct sans bufferisation pour minimiser la latence
+        this.dispatcher.onAudioFrame(userId, pcmChunk);
       });
 
       decoder.on("error", (err) => {
@@ -194,7 +185,6 @@ class MasterBot {
 
       opusStream.on("end", () => {
         decoder.destroy();
-        pcmBuffer = Buffer.alloc(0);
         this._onSpeakerSilence(userId);
       });
     });
