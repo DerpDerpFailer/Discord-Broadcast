@@ -408,7 +408,21 @@ class MasterBot {
       const channel = await this.client.channels.fetch(config.alertChannelId);
       if (channel?.isTextBased()) await channel.send(message);
     } catch (err) {
-      logger.warn("Impossible d'envoyer l'alerte", { error: err.message });
+      if (err.code === 50013 || err.message.includes("Missing Access") || err.message.includes("Missing Permissions")) {
+        logger.warn(
+          "⚠️  Alerte non envoyée : permissions manquantes sur le salon d'alertes. " +
+          `Ajoutez les permissions 'Voir le salon' et 'Envoyer des messages' au bot sur <#${config.alertChannelId}>.`,
+          { channelId: config.alertChannelId }
+        );
+      } else if (err.code === 10003 || err.message.includes("Unknown Channel")) {
+        logger.warn(
+          "⚠️  Alerte non envoyée : salon d'alertes introuvable. " +
+          "Vérifiez l'ID configuré via /setup.",
+          { channelId: config.alertChannelId }
+        );
+      } else {
+        logger.warn("Impossible d'envoyer l'alerte", { error: err.message });
+      }
     }
   }
 
