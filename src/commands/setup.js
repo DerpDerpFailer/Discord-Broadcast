@@ -379,7 +379,7 @@ function buildWelcome(userId) {
           "2️⃣  Rôle Shotcaller — peut parler + gérer le bot\n" +
           "3️⃣  Rôle Staff — peut gérer le bot (optionnel)\n" +
           "4️⃣  Salon d'alertes (optionnel)\n" +
-          "520e3  Canal cible de chaque relay bot"
+          "5️⃣  Canal cible de chaque relay bot"
         ),
     ],
     components: [
