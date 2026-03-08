@@ -20,7 +20,8 @@ Système de broadcast vocal Discord en temps réel : **1 canal source → jusqu'
 ```
 src/
 ├── index.js              ← Point d'entrée, câble tout
-├── config.js             ← Lit les variables d'environnement
+├── config.js             ← Lit les variables d'environnement + overlay JSON
+├── config-store.js       ← Lecture/écriture de /data/config.json
 ├── dispatcher.js         ← Tick unique 20ms, mixage + dispatch audio
 ├── master-bot.js         ← Capture audio Opus→PCM + gestion commandes
 ├── relay-bot.js          ← Lecture audio dans canal cible
@@ -30,7 +31,8 @@ src/
 ├── commands/
 │   ├── start.js          ← /start
 │   ├── stop.js           ← /stop
-│   └── status.js         ← /status
+│   ├── status.js         ← /status
+│   └── setup.js          ← /setup (wizard de configuration interactif)
 └── utils/
     └── logger.js         ← Winston structuré
 ```
@@ -42,6 +44,7 @@ src/
 - **Pipeline audio** — Discord Opus → prism.opus.Decoder → PCM s16le 48kHz stéréo → Dispatcher → Relay bots
 - **group voice unique** — chaque bot joinVoiceChannel avec son propre `group` pour éviter les collisions dans le même serveur
 - **@snazzah/davey** — requis pour la compatibilité avec le nouveau chiffrement Discord voice (aead_xchacha20_poly1305_rtpsize)
+- **Config persistante** — `/setup` sauvegarde la config dans `/data/config.json` (volume Docker), qui surcharge les variables d'environnement
 
 ## Prérequis
 
@@ -51,7 +54,7 @@ Créer **N+1 applications** sur https://discord.com/developers/applications :
 
 | Bot | Rôle |
 |-----|------|
-| Master Bot | Rejoint Shotcallers, écoute l'audio, gère /start /stop /status |
+| Master Bot | Rejoint Shotcallers, écoute l'audio, gère /start /stop /status /setup |
 | Relay Bot 1 | Rejoint Team 1 et joue l'audio |
 | Relay Bot 2 | Rejoint Team 2 et joue l'audio |
 | … | … jusqu'à 20 |
@@ -87,14 +90,16 @@ Dans la section **Environment variables** :
 |---|---|
 | `MASTER_BOT_TOKEN` | Token du bot maître |
 | `GUILD_ID` | ID du serveur Discord |
-| `SOURCE_CHANNEL_ID` | ID du canal Shotcallers |
-| `SHOTCALLER_ROLE_ID` | ID du rôle autorisé |
+| `SOURCE_CHANNEL_ID` | ID du canal Shotcallers (remplaçable via /setup) |
+| `SHOTCALLER_ROLE_ID` | ID du rôle autorisé (remplaçable via /setup) |
 | `RELAY_BOT_TOKEN_1` | Token relay bot 1 |
-| `TARGET_CHANNEL_ID_1` | ID canal Team 1 |
-| `RELAY_BOT_NAME_1` | `Team 1` |
+| `TARGET_CHANNEL_ID_1` | ID canal Team 1 (remplaçable via /setup) |
+| `RELAY_BOT_NAME_1` | `Team 1` (remplaçable via /setup) |
 | `RELAY_BOT_TOKEN_2` | Token relay bot 2 |
 | `TARGET_CHANNEL_ID_2` | ID canal Team 2 |
 | … | … |
+
+> **Note** : Les tokens des bots ne peuvent pas être modifiés via `/setup` pour des raisons de sécurité. Tous les autres paramètres sont configurables interactivement.
 
 ### 3. Deploy the stack
 
@@ -110,10 +115,11 @@ node scripts/register-commands.js
 
 Résultat attendu :
 ```
-✅ 3 commandes enregistrées :
-   /start — Démarre le broadcast vocal...
-   /stop  — Arrête le broadcast vocal
+✅ 4 commandes enregistrées :
+   /start  — Démarre le broadcast vocal...
+   /stop   — Arrête le broadcast vocal
    /status — Affiche le statut du système de broadcast
+   /setup  — Configure le système de broadcast vocal
 ```
 
 ## Utilisation
@@ -125,6 +131,21 @@ Dans Discord (avec le rôle Shotcaller) :
 | `/start` | Tous les bots rejoignent leurs canaux, broadcast actif |
 | `/stop` | Tous les bots quittent leurs canaux |
 | `/status` | Affiche l'état, les speakers actifs, les stats |
+| `/setup` | Lance le wizard de configuration interactif |
+
+### Wizard /setup
+
+Le wizard guide étape par étape :
+
+```
+Étape 0 → Accueil
+Étape 1 → Sélection du canal source (menu déroulant des canaux vocaux)
+Étape 2 → Sélection du rôle autorisé
+Étape 3 → Configuration de chaque relay bot (canal cible + nom)
+Étape 4 → Récapitulatif + Sauvegarder
+```
+
+La configuration est sauvegardée dans `/data/config.json` (volume Docker persistant) et s'applique **immédiatement** sans redémarrage. Relancez simplement `/start` pour utiliser les nouveaux canaux.
 
 ## Variables d'environnement complètes
 
@@ -132,17 +153,28 @@ Dans Discord (avec le rôle Shotcaller) :
 |---|---|---|
 | `MASTER_BOT_TOKEN` | — | **Requis** |
 | `GUILD_ID` | — | **Requis** |
-| `SOURCE_CHANNEL_ID` | — | **Requis** |
-| `SHOTCALLER_ROLE_ID` | — | **Requis** |
+| `SOURCE_CHANNEL_ID` | — | **Requis** (surchargeble via /setup) |
+| `SHOTCALLER_ROLE_ID` | — | **Requis** (surchargeble via /setup) |
 | `RELAY_BOT_TOKEN_N` | — | **Requis** (N = 1 à 20) |
-| `TARGET_CHANNEL_ID_N` | — | **Requis** (N = 1 à 20) |
-| `RELAY_BOT_NAME_N` | `Relay N` | Optionnel |
+| `TARGET_CHANNEL_ID_N` | — | **Requis** (N = 1 à 20, surchargeble via /setup) |
+| `RELAY_BOT_NAME_N` | `Relay N` | Optionnel (surchargeble via /setup) |
 | `FRAME_DURATION_MS` | `20` | Ne pas modifier |
 | `PCM_FRAME_SIZE` | `3840` | Ne pas modifier |
-| `JITTER_BUFFER_FRAMES` | `2` | Non utilisé (architecture passif) |
+| `JITTER_BUFFER_FRAMES` | `2` | Non utilisé (architecture passive) |
 | `MAX_BUFFER_FRAMES` | `25` | Taille max queue par speaker |
 | `SILENCE_THRESHOLD_MS` | `1000` | Délai silence avant arrêt du pipeline |
 | `LOG_LEVEL` | `info` | `error/warn/info/debug` |
+| `CONFIG_PATH` | `/data/config.json` | Chemin du fichier de config persistante |
+
+## Priorité de configuration
+
+```
+/data/config.json  (via /setup)   ← priorité haute
+       +
+Variables d'environnement         ← fallback
+```
+
+Les variables d'environnement sont toujours requises au démarrage. `/setup` les surcharge ensuite sans redémarrage.
 
 ## Notes de déploiement importantes
 
@@ -156,6 +188,16 @@ Les bots peuvent mettre jusqu'à 60 secondes pour établir la connexion voice (n
 
 ### Chiffrement Discord
 Discord impose depuis 2025 le mode `aead_xchacha20_poly1305_rtpsize`. Le package `@snazzah/davey` est requis pour la compatibilité — il est inclus dans `package.json`.
+
+### Rollback
+```bash
+# Revenir à la version stable taguée
+git checkout v1.0.0
+
+# Revenir à l'image Docker stable
+sudo docker tag discord-broadcast:v1.0.0 discord-broadcast:latest
+sudo docker restart discord-broadcast
+```
 
 ## Tests
 
