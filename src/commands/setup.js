@@ -253,14 +253,16 @@ module.exports = {
       const toSave = {
         sourceChannelId:  state.sourceChannelId,
         shotcallerRoleId: state.roleId,
-        staffRoleId:      state.staffRoleId || null,
+        staffRoleId:      state.staffRoleId    || null,
+        alertChannelId:   state.alertChannelId || null,
         relayBots: state.relayBots.map((b) => ({ channelId: b.channelId, name: b.name })),
       };
       configStore.save(toSave);
 
       config.sourceChannelId  = state.sourceChannelId;
       config.shotcallerRoleId = state.roleId;
-      config.staffRoleId      = state.staffRoleId || null;
+      config.staffRoleId      = state.staffRoleId    || null;
+      config.alertChannelId   = state.alertChannelId || null;
       state.relayBots.forEach((b, i) => {
         if (masterBot._relayBots[i]) {
           masterBot._relayBots[i].channelId = b.channelId;
@@ -466,14 +468,14 @@ function buildSourceChannel(state, userId) {
     ));
   }
 
-  rows.push(new ActionRowBuilder().addComponents(
-    new ButtonBuilder().setCustomId(`setup:cancel:${userId}`).setLabel("Annuler").setStyle(ButtonStyle.Secondary)
-  ));
+  const navRow1 = [new ButtonBuilder().setCustomId(`setup:cancel:${userId}`).setLabel("Annuler").setStyle(ButtonStyle.Secondary)];
+  if (state.sourceChannelId && !hasPending) navRow1.push(new ButtonBuilder().setCustomId(`setup:next:${userId}`).setLabel("Suivant →").setStyle(ButtonStyle.Primary));
+  rows.push(new ActionRowBuilder().addComponents(...navRow1));
 
   return {
     embeds: [
       new EmbedBuilder()
-        .setTitle("⚙️ Étape 1/4 — Canal source")
+        .setTitle("⚙️ Étape 1/5 — Canal source")
         .setColor(notFound ? 0xed4245 : hasPending ? 0xfee75c : 0x5865f2)
         .setDescription(description)
         .addFields({ name: "Canal configuré", value: state.sourceChannelId ? `<#${state.sourceChannelId}>` : "_Non configuré_" }),
@@ -509,15 +511,14 @@ function buildShotcallerRole(state, userId) {
     ));
   }
 
-  rows.push(new ActionRowBuilder().addComponents(
-    new ButtonBuilder().setCustomId(`setup:prev:${userId}`).setLabel("Précédent").setStyle(ButtonStyle.Secondary).setEmoji("◀️"),
-    new ButtonBuilder().setCustomId(`setup:cancel:${userId}`).setLabel("Annuler").setStyle(ButtonStyle.Secondary)
-  ));
+  const navRow2 = [new ButtonBuilder().setCustomId(`setup:prev:${userId}`).setLabel("Précédent").setStyle(ButtonStyle.Secondary).setEmoji("◀️"), new ButtonBuilder().setCustomId(`setup:cancel:${userId}`).setLabel("Annuler").setStyle(ButtonStyle.Secondary)];
+  if (state.roleId && !hasPending) navRow2.push(new ButtonBuilder().setCustomId(`setup:next:${userId}`).setLabel("Suivant →").setStyle(ButtonStyle.Primary));
+  rows.push(new ActionRowBuilder().addComponents(...navRow2));
 
   return {
     embeds: [
       new EmbedBuilder()
-        .setTitle("⚙️ Étape 2/4 — Rôle Shotcaller")
+        .setTitle("⚙️ Étape 2/5 — Rôle Shotcaller")
         .setColor(notFound ? 0xed4245 : hasPending ? 0xfee75c : 0x5865f2)
         .setDescription(description)
         .addFields({ name: "🎤 Rôle Shotcaller configuré", value: state.roleId ? `<@&${state.roleId}>` : "_Non configuré_" }),
@@ -553,16 +554,18 @@ function buildStaffRole(state, userId) {
     ));
   }
 
-  rows.push(new ActionRowBuilder().addComponents(
+  const navRow3 = [
     new ButtonBuilder().setCustomId(`setup:prev:${userId}`).setLabel("Précédent").setStyle(ButtonStyle.Secondary).setEmoji("◀️"),
     new ButtonBuilder().setCustomId(`setup:skip_staff:${userId}`).setLabel("Ignorer →").setStyle(ButtonStyle.Secondary),
-    new ButtonBuilder().setCustomId(`setup:cancel:${userId}`).setLabel("Annuler").setStyle(ButtonStyle.Danger)
-  ));
+  ];
+  if (state.staffRoleId && !hasPending) navRow3.push(new ButtonBuilder().setCustomId(`setup:next:${userId}`).setLabel("Suivant →").setStyle(ButtonStyle.Primary));
+  navRow3.push(new ButtonBuilder().setCustomId(`setup:cancel:${userId}`).setLabel("Annuler").setStyle(ButtonStyle.Danger));
+  rows.push(new ActionRowBuilder().addComponents(...navRow3));
 
   return {
     embeds: [
       new EmbedBuilder()
-        .setTitle("⚙️ Étape 3/4 — Rôle Staff (optionnel)")
+        .setTitle("⚙️ Étape 3/5 — Rôle Staff (optionnel)")
         .setColor(notFound ? 0xed4245 : hasPending ? 0xfee75c : 0x5865f2)
         .setDescription(description)
         .addFields({ name: "🛡️ Rôle Staff configuré", value: state.staffRoleId ? `<@&${state.staffRoleId}>` : "_Aucun_" }),
@@ -598,11 +601,15 @@ function buildAlertChannel(state, userId) {
     ));
   }
 
-  rows.push(new ActionRowBuilder().addComponents(
+  const navRow4 = [
     new ButtonBuilder().setCustomId(`setup:prev:${userId}`).setLabel("Précédent").setStyle(ButtonStyle.Secondary).setEmoji("◀️"),
     new ButtonBuilder().setCustomId(`setup:skip_alert:${userId}`).setLabel("Ignorer →").setStyle(ButtonStyle.Secondary),
-    new ButtonBuilder().setCustomId(`setup:cancel:${userId}`).setLabel("Annuler").setStyle(ButtonStyle.Danger)
-  ));
+  ];
+  if (state.alertChannelId && !hasPending) {
+    navRow4.push(new ButtonBuilder().setCustomId(`setup:next:${userId}`).setLabel("Suivant →").setStyle(ButtonStyle.Primary));
+  }
+  navRow4.push(new ButtonBuilder().setCustomId(`setup:cancel:${userId}`).setLabel("Annuler").setStyle(ButtonStyle.Danger));
+  rows.push(new ActionRowBuilder().addComponents(...navRow4));
 
   return {
     embeds: [
