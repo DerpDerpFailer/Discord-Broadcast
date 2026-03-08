@@ -258,8 +258,10 @@ class MasterBot {
 
     const hasRole = interaction.member?.roles?.cache?.has(config.shotcallerRoleId);
     if (!hasRole) {
+      const role = interaction.guild?.roles?.cache?.get(config.shotcallerRoleId);
+      const roleName = role?.name ?? "requis";
       await interaction.reply({
-        content: "❌ Vous devez avoir le rôle **Shotcaller** pour utiliser cette commande.",
+        content: `❌ Vous devez avoir le rôle **${roleName}** pour utiliser cette commande.`,
         ephemeral: true,
       });
       return;
