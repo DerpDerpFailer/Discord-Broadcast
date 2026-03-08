@@ -151,7 +151,31 @@ module.exports = {
       return interaction.update(buildStep(state, userId, relayCount, interaction.guild));
     }
 
-    // ── Étape 4 : relay bots ─────────────────────────────────────────────
+    // ── Étape 4 : salon d'alertes ────────────────────────────────────────────
+    if (action === "search_alert") {
+      return interaction.showModal(buildSearchModal("Nom du salon d'alertes", "Ex: logs-bots", `setup_modal:alert_search:${userId}`));
+    }
+    if (action === "confirm_alert") {
+      state.alertChannelId     = state.pendingChannelId;
+      state.pendingChannelId   = null;
+      state.pendingChannelName = null;
+      state.step = 5;
+      state.currentRelayIndex = 0;
+      return interaction.update(buildStep(state, userId, relayCount, interaction.guild));
+    }
+    if (action === "retry_alert") {
+      state.pendingChannelId   = null;
+      state.pendingChannelName = null;
+      return interaction.update(buildStep(state, userId, relayCount, interaction.guild));
+    }
+    if (action === "skip_alert") {
+      state.alertChannelId = null;
+      state.step = 5;
+      state.currentRelayIndex = 0;
+      return interaction.update(buildStep(state, userId, relayCount, interaction.guild));
+    }
+
+    // ── Étape 5 : relay bots ─────────────────────────────────────────────
     if (action === "search_relay") {
       const idx = state.currentRelayIndex;
       return interaction.showModal(buildSearchModal(
@@ -196,12 +220,12 @@ module.exports = {
       state.pendingChannelName = null;
       state.pendingRoleId      = null;
       state.pendingRoleName    = null;
-      if (state.step === 4 && state.currentRelayIndex > 0) {
+      if (state.step === 5 && state.currentRelayIndex > 0) {
         state.currentRelayIndex--;
-      } else if (state.step === 4 && state.currentRelayIndex === 0) {
-        state.step = 3;
-      } else if (state.step === 5) {
+      } else if (state.step === 5 && state.currentRelayIndex === 0) {
         state.step = 4;
+      } else if (state.step === 6) {
+        state.step = 5;
         state.currentRelayIndex = relayCount - 1;
       } else {
         state.step = Math.max(0, state.step - 1);
@@ -212,11 +236,11 @@ module.exports = {
     if (action === "next") {
       state.pendingChannelId   = null;
       state.pendingChannelName = null;
-      if (state.step === 4) {
+      if (state.step === 5) {
         if (state.currentRelayIndex < relayCount - 1) {
           state.currentRelayIndex++;
         } else {
-          state.step = 5;
+          state.step = 6;
         }
       } else {
         state.step++;
@@ -304,6 +328,15 @@ module.exports = {
       return interaction.editReply(buildStep(state, userId, relayCount, guild));
     }
 
+    if (action === "alert_search") {
+      const query   = interaction.fields.getTextInputValue("query").toLowerCase();
+      const channel = findTextChannel(guild, query);
+      state.pendingChannelId   = channel?.id   ?? null;
+      state.pendingChannelName = channel?.name ?? `"${query}" introuvable`;
+      await interaction.deferUpdate();
+      return interaction.editReply(buildStep(state, userId, relayCount, guild));
+    }
+
     if (action === "relay_search") {
       const query   = interaction.fields.getTextInputValue("query").toLowerCase();
       const channel = findVoiceChannel(guild, query);
@@ -327,6 +360,13 @@ module.exports = {
 function findVoiceChannel(guild, query) {
   return guild.channels.cache.find(
     (c) => c.type === ChannelType.GuildVoice && c.name.toLowerCase().includes(query)
+  ) || null;
+}
+
+function findTextChannel(guild, query) {
+  return guild.channels.cache.find(
+    (c) => (c.type === ChannelType.GuildText || c.type === ChannelType.GuildAnnouncement) &&
+           c.name.toLowerCase().includes(query)
   ) || null;
 }
 
@@ -360,8 +400,9 @@ function buildStep(state, userId, relayCount, guild) {
   if (state.step === 1) return buildSourceChannel(state, userId);
   if (state.step === 2) return buildShotcallerRole(state, userId);
   if (state.step === 3) return buildStaffRole(state, userId);
-  if (state.step === 4) return buildRelayBot(state, userId, relayCount);
-  if (state.step === 5) return buildSummary(state, userId, relayCount);
+  if (state.step === 4) return buildAlertChannel(state, userId);
+  if (state.step === 5) return buildRelayBot(state, userId, relayCount);
+  if (state.step === 6) return buildSummary(state, userId, relayCount);
 }
 
 // ── Étape 0 — Accueil ─────────────────────────────────────────────────────
@@ -530,7 +571,55 @@ function buildStaffRole(state, userId) {
   };
 }
 
-// ── Étape 4 — Relay bots ──────────────────────────────────────────────────
+// ── Étape 4 — Salon d'alertes ────────────────────────────────────────────
+
+function buildAlertChannel(state, userId) {
+  const hasPending = !!state.pendingChannelId;
+  const notFound   = state.pendingChannelName?.includes("introuvable");
+
+  let description = "Tapez le nom du **salon texte** où envoyer les alertes de déconnexion _(optionnel)_.";
+  if (notFound)        description = `❌ **${state.pendingChannelName}**\nVérifiez l'orthographe et réessayez.`;
+  else if (hasPending) description = `J'ai trouvé **#${state.pendingChannelName}**, c'est bien ça ?`;
+
+  const rows = [
+    new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`setup:search_alert:${userId}`)
+        .setLabel("Rechercher un salon")
+        .setStyle(ButtonStyle.Primary)
+        .setEmoji("🔍"),
+    ),
+  ];
+
+  if (hasPending && !notFound) {
+    rows.unshift(new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId(`setup:confirm_alert:${userId}`).setLabel("✅ Oui, c'est ça !").setStyle(ButtonStyle.Success),
+      new ButtonBuilder().setCustomId(`setup:retry_alert:${userId}`).setLabel("❌ Non, chercher à nouveau").setStyle(ButtonStyle.Danger)
+    ));
+  }
+
+  rows.push(new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId(`setup:prev:${userId}`).setLabel("Précédent").setStyle(ButtonStyle.Secondary).setEmoji("◀️"),
+    new ButtonBuilder().setCustomId(`setup:skip_alert:${userId}`).setLabel("Ignorer →").setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId(`setup:cancel:${userId}`).setLabel("Annuler").setStyle(ButtonStyle.Danger)
+  ));
+
+  return {
+    embeds: [
+      new EmbedBuilder()
+        .setTitle("⚙️ Étape 4/5 — Salon d'alertes (optionnel)")
+        .setColor(notFound ? 0xed4245 : hasPending ? 0xfee75c : 0x5865f2)
+        .setDescription(description)
+        .addFields({
+          name:  "🔔 Salon configuré",
+          value: state.alertChannelId ? `<#${state.alertChannelId}>` : "_Aucun_",
+        }),
+    ],
+    components: rows,
+  };
+}
+
+// ── Étape 5 — Relay bots ──────────────────────────────────────────────────
 
 function buildRelayBot(state, userId, relayCount) {
   const idx        = state.currentRelayIndex;
@@ -573,7 +662,7 @@ function buildRelayBot(state, userId, relayCount) {
   return {
     embeds: [
       new EmbedBuilder()
-        .setTitle(`⚙️ Étape 4/4 — Relay bot ${idx + 1}/${relayCount}`)
+        .setTitle(`⚙️ Étape 5/5 — Relay bot ${idx + 1}/${relayCount}`)
         .setColor(notFound ? 0xed4245 : hasPending ? 0xfee75c : 0x5865f2)
         .setDescription(description)
         .addFields(
