@@ -308,14 +308,20 @@ class MasterBot {
     const command = this.commands.get(interaction.commandName);
     if (!command) return;
 
-    const hasRole = interaction.member?.roles?.cache?.has(config.shotcallerRoleId);
+    const configuredRole  = interaction.guild?.roles?.cache?.get(config.shotcallerRoleId);
+    const roleExistsHere  = !!configuredRole;
+
+    // Si le rôle configuré n'existe pas sur ce serveur → fallback Administrator
+    // (permet de bootstrapper /setup sur un nouveau serveur sans chicken-and-egg)
+    const hasRole = roleExistsHere
+      ? interaction.member?.roles?.cache?.has(config.shotcallerRoleId)
+      : interaction.member?.permissions?.has("Administrator");
+
     if (!hasRole) {
-      const role = interaction.guild?.roles?.cache?.get(config.shotcallerRoleId);
-      const roleName = role?.name ?? "requis";
-      await interaction.reply({
-        content: `❌ Vous devez avoir le rôle **${roleName}** pour utiliser cette commande.`,
-        ephemeral: true,
-      });
+      const hint = roleExistsHere
+        ? `Vous devez avoir le rôle **${configuredRole.name}** pour utiliser cette commande.`
+        : `Aucun rôle autorisé configuré sur ce serveur.\nUtilisez \`/setup\` en tant qu'**Administrateur** pour en définir un.`;
+      await interaction.reply({ content: `❌ ${hint}`, ephemeral: true });
       return;
     }
 
