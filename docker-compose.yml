@@ -114,6 +114,9 @@ services:
       # Niveaux : error | warn | info | debug
       - LOG_LEVEL=${LOG_LEVEL:-info}
 
+    volumes:
+      - broadcast_data:/data
+
     dns:
       - 1.1.1.1
       - 8.8.8.8
@@ -123,3 +126,7 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
+
+volumes:
+  broadcast_data:
+    driver: local

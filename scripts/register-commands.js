@@ -37,6 +37,9 @@ const commands = [
   new SlashCommandBuilder()
     .setName("status")
     .setDescription("Affiche le statut du système de broadcast"),
+  new SlashCommandBuilder()
+    .setName("setup")
+    .setDescription("Configure le système de broadcast vocal"),
 ].map((c) => c.toJSON());
 
 (async () => {

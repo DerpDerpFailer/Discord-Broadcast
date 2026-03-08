@@ -80,4 +80,24 @@ try {
   process.exit(1);
 }
 
+// Surcharge avec la config JSON sauvegardée via /setup (si elle existe)
+try {
+  const store = require("./config-store");
+  const saved = store.load();
+
+  if (saved.sourceChannelId)  config.sourceChannelId  = saved.sourceChannelId;
+  if (saved.shotcallerRoleId) config.shotcallerRoleId = saved.shotcallerRoleId;
+
+  if (Array.isArray(saved.relayBots)) {
+    saved.relayBots.forEach((b, i) => {
+      if (config.relayBots[i]) {
+        if (b.channelId) config.relayBots[i].channelId = b.channelId;
+        if (b.name)      config.relayBots[i].name      = b.name;
+      }
+    });
+  }
+} catch (e) {
+  // Pas de config JSON sauvegardée — on utilise les env vars uniquement
+}
+
 module.exports = config;

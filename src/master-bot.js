@@ -24,6 +24,7 @@ const logger = require("./utils/logger").child("MasterBot");
 const startCmd  = require("./commands/start");
 const stopCmd   = require("./commands/stop");
 const statusCmd = require("./commands/status");
+const setupCmd  = require("./commands/setup");
 
 class MasterBot {
   /** @param {import('./dispatcher')} dispatcher */
@@ -42,6 +43,7 @@ class MasterBot {
     this.commands.set("start",  startCmd);
     this.commands.set("stop",   stopCmd);
     this.commands.set("status", statusCmd);
+    this.commands.set("setup",  setupCmd);
   }
 
   // ── Connexion Discord ─────────────────────────────────────────────────────
@@ -71,7 +73,7 @@ class MasterBot {
 
   /** Enregistre les slash commands (à appeler une fois). */
   async registerCommands() {
-    const body = [startCmd, stopCmd, statusCmd].map((c) => c.data.toJSON());
+    const body = [startCmd, stopCmd, statusCmd, setupCmd].map((c) => c.data.toJSON());
     const rest = new REST().setToken(config.masterToken);
 
     await rest.put(
@@ -229,6 +231,26 @@ class MasterBot {
   // ── Commandes ─────────────────────────────────────────────────────────────
 
   async _handleInteraction(interaction) {
+    // ── Composants du wizard /setup (boutons, menus) ───────────────────
+    if (interaction.isMessageComponent() && interaction.customId.startsWith("setup:")) {
+      try {
+        await setupCmd.handleComponent(interaction, this);
+      } catch (err) {
+        logger.error("Erreur setup component", { error: err.message });
+      }
+      return;
+    }
+
+    // ── Modales du wizard /setup ───────────────────────────────────────
+    if (interaction.isModalSubmit() && interaction.customId.startsWith("setup_modal:")) {
+      try {
+        await setupCmd.handleModal(interaction, this);
+      } catch (err) {
+        logger.error("Erreur setup modal", { error: err.message });
+      }
+      return;
+    }
+
     if (!interaction.isChatInputCommand()) return;
 
     const command = this.commands.get(interaction.commandName);
