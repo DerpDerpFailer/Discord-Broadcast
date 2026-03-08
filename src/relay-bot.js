@@ -59,6 +59,8 @@ class RelayBot {
     this._registered        = false;
     this._reconnectAttempts = 0;
     this._reconnectTimer    = null;
+    this._alertSent         = false;
+    this.alertCallback      = null; // set by index.js after login
   }
 
   // ── Connexion Discord ─────────────────────────────────────────────────────
@@ -150,6 +152,11 @@ class RelayBot {
       if (newState.status === VoiceConnectionStatus.Ready) {
         this._connected         = true;
         this._reconnectAttempts = 0;
+        // Alerte retour en ligne si on avait alerté
+        if (this._alertSent) {
+          this._alertSent = false;
+          this.alertCallback?.(`✅ **${this.name}** est de retour en ligne — <#${this.channelId}>`);
+        }
         logger.info(`Connexion voice prête`, { name: this.name, channel: channel.name });
         if (!this._registered) {
           this._registered = true;
@@ -184,6 +191,15 @@ class RelayBot {
     this._reconnectTimer = setTimeout(async () => {
       this._reconnectTimer    = null;
       this._reconnectAttempts = attempt + 1;
+
+      // Alerte après 3 tentatives échouées
+      if (this._reconnectAttempts === 3 && !this._alertSent) {
+        this._alertSent = true;
+        this.alertCallback?.(
+          `⚠️ **${this.name}** ne parvient pas à se reconnecter à <#${this.channelId}> ` +
+          `(${this._reconnectAttempts} tentatives). Vérifiez les logs.`
+        );
+      }
 
       if (!this._broadcasting) return;
 
@@ -242,6 +258,7 @@ class RelayBot {
     this._broadcasting = false;
     this._connected    = false;
     this._registered   = false;
+    this._alertSent    = false;
 
     if (this._reconnectTimer) {
       clearTimeout(this._reconnectTimer);

@@ -58,6 +58,11 @@ async function main() {
     }
   });
 
+  // 4b. Câbler le callback d'alerte sur chaque relay
+  relayBots.forEach((bot) => {
+    bot.alertCallback = (msg) => masterBot.sendAlert(msg);
+  });
+
   // 5. Enregistrement des slash commands
   try {
     await masterBot.registerCommands();

@@ -54,6 +54,9 @@ services:
       # ID du rôle autorisé à utiliser /start /stop /status (optionnel)
       - STAFF_ROLE_ID=${STAFF_ROLE_ID:-}
 
+      # ID du salon texte pour les alertes de déconnexion (optionnel)
+      - ALERT_CHANNEL_ID=${ALERT_CHANNEL_ID:-}
+
       # ── BOTS RELAIS ─────────────────────────────────────────────────────────
       # Ajoutez autant de bots que de canaux cibles (max 20)
       # Chaque bot nécessite son propre token Discord

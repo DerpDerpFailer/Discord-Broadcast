@@ -400,6 +400,18 @@ class MasterBot {
     }
   }
 
+  // ── Alertes ──────────────────────────────────────────────────────────────
+
+  async sendAlert(message) {
+    if (!config.alertChannelId) return;
+    try {
+      const channel = await this.client.channels.fetch(config.alertChannelId);
+      if (channel?.isTextBased()) await channel.send(message);
+    } catch (err) {
+      logger.warn("Impossible d'envoyer l'alerte", { error: err.message });
+    }
+  }
+
   // ── Status ────────────────────────────────────────────────────────────────
 
   get isBroadcasting() {
