@@ -37,9 +37,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY --from=builder /app/node_modules ./node_modules
 
 # Copy application code
-COPY package.json     ./package.json
-COPY src/             ./src/
-COPY scripts/         ./scripts/
+COPY package.json          ./package.json
+COPY src/                  ./src/
+COPY scripts/              ./scripts/
+COPY docker-entrypoint.sh  ./docker-entrypoint.sh
 
 # Run as non-root user
 RUN groupadd -r discord && useradd -r -g discord discord
@@ -47,10 +48,13 @@ RUN groupadd -r discord && useradd -r -g discord discord
 # Créer /data et donner les droits à l'utilisateur discord
 RUN mkdir -p /data && chown discord:discord /data
 
+# Rendre l'entrypoint exécutable (avant de switcher d'utilisateur)
+RUN chmod +x docker-entrypoint.sh
+
 USER discord
 
 # Basic liveness check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
     CMD node -e "require('./src/config.js'); process.exit(0)" || exit 1
 
-CMD ["node", "src/index.js"]
+CMD ["./docker-entrypoint.sh"]
