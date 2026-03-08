@@ -136,6 +136,7 @@ class MasterBot {
 
   _startReceiving() {
     const receiver = this.connection.receiver;
+    const prism = require("prism-media");
 
     receiver.speaking.on("start", (userId) => {
       if (this._activeSpeakers.has(userId)) return;
@@ -146,19 +147,44 @@ class MasterBot {
         this._speakerTimers.delete(userId);
       }
 
-      const audioStream = receiver.subscribe(userId, {
+      // Récupérer le flux Opus brut depuis Discord
+      const opusStream = receiver.subscribe(userId, {
         end: {
           behavior: EndBehaviorType.AfterSilence,
           duration: config.silenceThresholdMs,
         },
       });
 
-      audioStream.on("data", (chunk) => {
-        this.dispatcher.onAudioFrame(userId, chunk);
+      // Décoder Opus → PCM s16le 48kHz stéréo
+      const decoder = new prism.opus.Decoder({
+        rate:      48000,
+        channels:  2,
+        frameSize: 960,
       });
 
-      audioStream.on("end",   () => this._onSpeakerSilence(userId));
-      audioStream.on("error", () => this._onSpeakerSilence(userId));
+      // Pipeline : Opus → Decoder → PCM → Dispatcher
+      opusStream.pipe(decoder);
+
+      decoder.on("data", (pcmChunk) => {
+        this.dispatcher.onAudioFrame(userId, pcmChunk);
+      });
+
+      decoder.on("error", (err) => {
+        if (!err.message.includes("decode")) {
+          logger.error("Erreur décodeur Opus", { userId, error: err.message });
+        }
+      });
+
+      opusStream.on("error", (err) => {
+        if (!err.message.includes("decrypt")) {
+          logger.error("Erreur flux Opus", { userId, error: err.message });
+        }
+      });
+
+      opusStream.on("end", () => {
+        decoder.destroy();
+        this._onSpeakerSilence(userId);
+      });
     });
 
     receiver.speaking.on("end", (userId) => {
@@ -170,7 +196,7 @@ class MasterBot {
       this._speakerTimers.set(userId, t);
     });
 
-    logger.info("Réception audio démarrée");
+    logger.info("Réception audio démarrée (Opus → PCM)");
   }
 
   _onSpeakerSilence(userId) {
