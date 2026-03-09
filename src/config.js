@@ -99,6 +99,13 @@ try {
   if (saved.staffRoleId)      config.staffRoleId      = saved.staffRoleId;
   if (saved.alertChannelId)   config.alertChannelId   = saved.alertChannelId;
 
+  // Paramètres avancés sauvegardés via /setup
+  if (saved.adv_silenceThresholdMs  != null) config.silenceThresholdMs  = saved.adv_silenceThresholdMs;
+  if (saved.adv_maxBufferFrames      != null) config.maxBufferFrames     = saved.adv_maxBufferFrames;
+  if (saved.adv_watchdogThresholdMs  != null) config.watchdogThresholdMs = saved.adv_watchdogThresholdMs;
+  if (saved.adv_autoDisconnectMs     != null) config.autoDisconnectMs    = saved.adv_autoDisconnectMs;
+  if (saved.adv_logLevel)                     config.logLevel            = saved.adv_logLevel;
+
   if (Array.isArray(saved.relayBots)) {
     saved.relayBots.forEach((b, i) => {
       if (config.relayBots[i]) {

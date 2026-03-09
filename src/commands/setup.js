@@ -55,6 +55,12 @@ module.exports = {
       pendingChannelName:  null,
       pendingRoleId:       null,
       pendingRoleName:     null,
+      // Paramètres avancés (lus depuis config en vigueur)
+      adv_silenceThresholdMs:  saved.adv_silenceThresholdMs  ?? config.silenceThresholdMs,
+      adv_maxBufferFrames:     saved.adv_maxBufferFrames      ?? config.maxBufferFrames,
+      adv_watchdogThresholdMs: saved.adv_watchdogThresholdMs ?? config.watchdogThresholdMs,
+      adv_autoDisconnectMs:    saved.adv_autoDisconnectMs     ?? config.autoDisconnectMs,
+      adv_logLevel:            saved.adv_logLevel             ?? config.logLevel,
     });
 
     await interaction.reply({
@@ -248,6 +254,48 @@ module.exports = {
       return interaction.update(buildStep(state, userId, relayCount, interaction.guild));
     }
 
+    // ── Paramètres avancés ───────────────────────────────────────────────
+    if (action === "advanced") {
+      state._advancedFrom = state.step; // pour revenir
+      state.step = 7;
+      return interaction.update(buildStep(state, userId, relayCount, interaction.guild));
+    }
+
+    if (action === "advanced_back") {
+      state.step = state._advancedFrom ?? 0;
+      return interaction.update(buildStep(state, userId, relayCount, interaction.guild));
+    }
+
+    if (action === "advanced_edit") {
+      const ms2min = (ms) => ms === 0 ? "0" : String(Math.round(ms / 60000));
+      const modal = new ModalBuilder()
+        .setCustomId(`setup_modal:advanced:${userId}`)
+        .setTitle("Paramètres avancés")
+        .addComponents(
+          new ActionRowBuilder().addComponents(
+            new TextInputBuilder().setCustomId("silence").setLabel("Silence avant arrêt speaker (ms)")
+              .setStyle(TextInputStyle.Short).setValue(String(state.adv_silenceThresholdMs)).setRequired(true).setMaxLength(6)
+          ),
+          new ActionRowBuilder().addComponents(
+            new TextInputBuilder().setCustomId("buffer").setLabel("Max frames en buffer par speaker")
+              .setStyle(TextInputStyle.Short).setValue(String(state.adv_maxBufferFrames)).setRequired(true).setMaxLength(4)
+          ),
+          new ActionRowBuilder().addComponents(
+            new TextInputBuilder().setCustomId("watchdog").setLabel("Watchdog pipeline (ms, 0 = désactivé)")
+              .setStyle(TextInputStyle.Short).setValue(String(state.adv_watchdogThresholdMs)).setRequired(true).setMaxLength(8)
+          ),
+          new ActionRowBuilder().addComponents(
+            new TextInputBuilder().setCustomId("autodisconnect").setLabel("Auto-disconnect inactivité (min, 0 = off)")
+              .setStyle(TextInputStyle.Short).setValue(ms2min(state.adv_autoDisconnectMs)).setRequired(true).setMaxLength(6)
+          ),
+          new ActionRowBuilder().addComponents(
+            new TextInputBuilder().setCustomId("loglevel").setLabel("Niveau de log (error/warn/info/debug)")
+              .setStyle(TextInputStyle.Short).setValue(state.adv_logLevel).setRequired(true).setMaxLength(10)
+          )
+        );
+      return interaction.showModal(modal);
+    }
+
     // ── Sauvegarder ──────────────────────────────────────────────────────
     if (action === "save") {
       const toSave = {
@@ -256,13 +304,23 @@ module.exports = {
         staffRoleId:      state.staffRoleId    || null,
         alertChannelId:   state.alertChannelId || null,
         relayBots: state.relayBots.map((b) => ({ channelId: b.channelId, name: b.name })),
+        adv_silenceThresholdMs:  state.adv_silenceThresholdMs,
+        adv_maxBufferFrames:     state.adv_maxBufferFrames,
+        adv_watchdogThresholdMs: state.adv_watchdogThresholdMs,
+        adv_autoDisconnectMs:    state.adv_autoDisconnectMs,
+        adv_logLevel:            state.adv_logLevel,
       };
       configStore.save(toSave);
 
-      config.sourceChannelId  = state.sourceChannelId;
-      config.shotcallerRoleId = state.roleId;
-      config.staffRoleId      = state.staffRoleId    || null;
-      config.alertChannelId   = state.alertChannelId || null;
+      config.sourceChannelId       = state.sourceChannelId;
+      config.shotcallerRoleId      = state.roleId;
+      config.staffRoleId           = state.staffRoleId    || null;
+      config.alertChannelId        = state.alertChannelId || null;
+      config.silenceThresholdMs    = state.adv_silenceThresholdMs;
+      config.maxBufferFrames       = state.adv_maxBufferFrames;
+      config.watchdogThresholdMs   = state.adv_watchdogThresholdMs;
+      config.autoDisconnectMs      = state.adv_autoDisconnectMs;
+      config.logLevel              = state.adv_logLevel;
       state.relayBots.forEach((b, i) => {
         if (masterBot._relayBots[i]) {
           masterBot._relayBots[i].channelId = b.channelId;
@@ -354,6 +412,20 @@ module.exports = {
       await interaction.deferUpdate();
       return interaction.editReply(buildStep(state, userId, relayCount, guild));
     }
+
+    if (action === "advanced") {
+      const parse    = (key, fallback) => { const v = parseInt(interaction.fields.getTextInputValue(key)); return isNaN(v) ? fallback : Math.max(0, v); };
+      const parseLog = () => { const v = interaction.fields.getTextInputValue("loglevel").trim().toLowerCase(); return ["error","warn","info","debug"].includes(v) ? v : state.adv_logLevel; };
+
+      state.adv_silenceThresholdMs  = parse("silence",         state.adv_silenceThresholdMs);
+      state.adv_maxBufferFrames     = parse("buffer",          state.adv_maxBufferFrames);
+      state.adv_watchdogThresholdMs = parse("watchdog",        state.adv_watchdogThresholdMs);
+      state.adv_autoDisconnectMs    = parse("autodisconnect",  0) * 60000; // min → ms
+      state.adv_logLevel            = parseLog();
+
+      await interaction.deferUpdate();
+      return interaction.editReply(buildStep(state, userId, relayCount, guild));
+    }
   },
 };
 
@@ -405,6 +477,7 @@ function buildStep(state, userId, relayCount, guild) {
   if (state.step === 4) return buildAlertChannel(state, userId);
   if (state.step === 5) return buildRelayBot(state, userId, relayCount);
   if (state.step === 6) return buildSummary(state, userId, relayCount);
+  if (state.step === 7) return buildAdvanced(state, userId);
 }
 
 // ── Étape 0 — Accueil ─────────────────────────────────────────────────────
@@ -432,6 +505,11 @@ function buildWelcome(userId) {
           .setLabel("Démarrer")
           .setStyle(ButtonStyle.Primary)
           .setEmoji("⚙️"),
+        new ButtonBuilder()
+          .setCustomId(`setup:advanced:${userId}`)
+          .setLabel("Paramètres avancés")
+          .setStyle(ButtonStyle.Secondary)
+          .setEmoji("🔧"),
         new ButtonBuilder()
           .setCustomId(`setup:cancel:${userId}`)
           .setLabel("Annuler")
@@ -681,7 +759,64 @@ function buildRelayBot(state, userId, relayCount) {
   };
 }
 
-// ── Étape 5 — Récapitulatif ───────────────────────────────────────────────
+// ── Étape 7 — Paramètres avancés ─────────────────────────────────────────
+
+function buildAdvanced(state, userId) {
+  const min2str = (ms) => ms === 0 ? "désactivé" : `${Math.round(ms / 60000)} min`;
+
+  return {
+    embeds: [
+      new EmbedBuilder()
+        .setTitle("🔧 Paramètres avancés")
+        .setColor(0x5865f2)
+        .setDescription(
+          "Ces paramètres affectent le comportement audio et la robustesse du système.\n" +
+          "Cliquez sur **Modifier** pour changer les valeurs."
+        )
+        .addFields(
+          {
+            name:  "🔇 Silence avant arrêt speaker",
+            value: `\`${state.adv_silenceThresholdMs} ms\` — délai avant de considérer qu'un speaker a arrêté de parler`,
+          },
+          {
+            name:  "📦 Buffer max par speaker",
+            value: `\`${state.adv_maxBufferFrames} frames\` — soit ${state.adv_maxBufferFrames * 20} ms de buffer avant drop`,
+          },
+          {
+            name:  "🐕 Watchdog pipeline",
+            value: state.adv_watchdogThresholdMs === 0
+              ? "🔴 Désactivé"
+              : `🟢 Redémarre si bloqué > \`${state.adv_watchdogThresholdMs} ms\``,
+          },
+          {
+            name:  "💤 Auto-disconnect",
+            value: state.adv_autoDisconnectMs === 0
+              ? "🔴 Désactivé"
+              : `🟢 Arrête le broadcast après \`${min2str(state.adv_autoDisconnectMs)}\` d'inactivité`,
+          },
+          {
+            name:  "📋 Niveau de log",
+            value: `\`${state.adv_logLevel}\``,
+          }
+        ),
+    ],
+    components: [
+      new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId(`setup:advanced_back:${userId}`)
+          .setLabel("Retour")
+          .setStyle(ButtonStyle.Secondary)
+          .setEmoji("◀️"),
+        new ButtonBuilder()
+          .setCustomId(`setup:advanced_edit:${userId}`)
+          .setLabel("✏️ Modifier")
+          .setStyle(ButtonStyle.Primary),
+      ),
+    ],
+  };
+}
+
+// ── Étape 6 — Récapitulatif ───────────────────────────────────────────────
 
 function buildSummary(state, userId, relayCount) {
   const relayLines = state.relayBots
@@ -715,6 +850,10 @@ function buildSummary(state, userId, relayCount) {
     components: [
       new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId(`setup:prev:${userId}`).setLabel("Précédent").setStyle(ButtonStyle.Secondary).setEmoji("◀️"),
+        new ButtonBuilder()
+          .setCustomId(`setup:advanced:${userId}`)
+          .setLabel("🔧 Avancé")
+          .setStyle(ButtonStyle.Secondary),
         new ButtonBuilder()
           .setCustomId(`setup:save:${userId}`)
           .setLabel("💾 Sauvegarder")
