@@ -67,8 +67,15 @@ const config = {
   pcmFrameSize:      parseInt(process.env.PCM_FRAME_SIZE      || "3840"),
   frameDurationMs:   parseInt(process.env.FRAME_DURATION_MS   || "20"),
   jitterBufferFrames:parseInt(process.env.JITTER_BUFFER_FRAMES|| "2"),
-  maxBufferFrames:   parseInt(process.env.MAX_BUFFER_FRAMES   || "25"),
-  silenceThresholdMs:parseInt(process.env.SILENCE_THRESHOLD_MS|| "150"),
+  maxBufferFrames:    parseInt(process.env.MAX_BUFFER_FRAMES    || "25"),
+  silenceThresholdMs: parseInt(process.env.SILENCE_THRESHOLD_MS || "150"),
+
+  // Watchdog : redémarre le pipeline si aucune frame n'est émise depuis X ms alors qu'un speaker est actif
+  // 0 = désactivé
+  watchdogThresholdMs: parseInt(process.env.WATCHDOG_THRESHOLD_MS || "5000"),
+
+  // Auto-disconnect : quitte le canal source si vide depuis X ms (0 = désactivé)
+  autoDisconnectMs: parseInt(process.env.AUTO_DISCONNECT_MS || "600000"),
 
   // Logs
   logLevel: process.env.LOG_LEVEL || "info",

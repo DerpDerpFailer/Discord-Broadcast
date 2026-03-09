@@ -35,6 +35,8 @@ class AudioDispatcher extends EventEmitter {
       totalFramesDropped:    0,
       startedAt:             null,
     };
+
+    this._lastFrameAt = null; // timestamp de la dernière frame audio réelle émise
   }
 
   // ── Gestion des relays ────────────────────────────────────────────────────
@@ -158,6 +160,7 @@ class AudioDispatcher extends EventEmitter {
       try {
         stream.pushFrame(mixed);
         this._stats.totalFramesDispatched++;
+        this._lastFrameAt = Date.now();
       } catch (err) {
         logger.error(`Erreur push frame relay`, { relayId, error: err.message });
       }

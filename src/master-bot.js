@@ -44,6 +44,10 @@ class MasterBot {
     this._reconnectAttempts = 0;
     this._reconnectTimer    = null;
 
+    this._watchdogInterval    = null;
+    this._autoDisconnectTimer = null;
+    this._lastSpeakerAt       = null;
+
     this.commands = new Collection();
     this.commands.set("start",  startCmd);
     this.commands.set("stop",   stopCmd);
@@ -135,6 +139,8 @@ class MasterBot {
           this._receiverStarted = true;
           this.dispatcher.start();
           this._startReceiving();
+          this._startWatchdog();
+          this._resetAutoDisconnect();
           logger.info(`Broadcast actif`, { source: channel.name });
         }
       }
@@ -277,7 +283,75 @@ class MasterBot {
   _onSpeakerSilence(userId) {
     if (this._activeSpeakers.delete(userId)) {
       this.dispatcher.onSpeakerStop(userId);
+      // Si plus aucun speaker actif, on note le timestamp et on arme le timer
+      if (this._activeSpeakers.size === 0) {
+        this._lastSpeakerAt = Date.now();
+        this._resetAutoDisconnect();
+      }
     }
+  }
+
+  // ── Watchdog ──────────────────────────────────────────────────────────────
+
+  _startWatchdog() {
+    if (this._watchdogInterval) clearInterval(this._watchdogInterval);
+    if (!config.watchdogThresholdMs) return;
+
+    this._watchdogInterval = setInterval(() => {
+      if (!this._broadcasting || this._activeSpeakers.size === 0) return;
+
+      const lastFrame = this.dispatcher._lastFrameAt;
+      const elapsed   = lastFrame ? Date.now() - lastFrame : Infinity;
+
+      if (elapsed > config.watchdogThresholdMs) {
+        logger.warn(`Watchdog déclenché : aucune frame depuis ${Math.round(elapsed / 1000)}s malgré ${this._activeSpeakers.size} speaker(s) actif(s). Redémarrage du pipeline...`);
+        this.sendAlert(`⚠️ **Watchdog** — Pipeline audio bloqué (${Math.round(elapsed / 1000)}s sans frame). Redémarrage automatique en cours...`);
+
+        // Réinitialiser les speakers et redémarrer la réception
+        for (const [, t] of this._speakerTimers) clearTimeout(t);
+        this._speakerTimers.clear();
+
+        for (const userId of this._activeSpeakers) {
+          this.dispatcher.onSpeakerStop(userId);
+        }
+        this._activeSpeakers.clear();
+
+        // Redémarrer le receiver si la connexion est encore active
+        if (this.connection) {
+          this._receiverStarted = false;
+          this._startReceiving();
+          logger.info("Pipeline audio redémarré par le watchdog");
+        }
+      }
+    }, Math.max(config.watchdogThresholdMs, 2000));
+
+    this._watchdogInterval.unref();
+  }
+
+  // ── Auto-disconnect ───────────────────────────────────────────────────────
+
+  _resetAutoDisconnect() {
+    if (this._autoDisconnectTimer) {
+      clearTimeout(this._autoDisconnectTimer);
+      this._autoDisconnectTimer = null;
+    }
+    if (!config.autoDisconnectMs || !this._broadcasting) return;
+    // N'armer que si aucun speaker actif
+    if (this._activeSpeakers.size > 0) return;
+
+    this._autoDisconnectTimer = setTimeout(async () => {
+      if (!this._broadcasting || this._activeSpeakers.size > 0) return;
+
+      const idleSec = Math.round(config.autoDisconnectMs / 1000);
+      logger.info(`Canal source inactif depuis ${idleSec}s — déconnexion automatique`);
+      this.sendAlert(`💤 **Auto-disconnect** — Aucune activité depuis ${idleSec}s. Le broadcast s'arrête pour économiser les ressources. Relancez \`/start\` quand nécessaire.`);
+
+      // Arrêter tous les relays puis le master
+      await Promise.allSettled(this._relayBots.map((b) => b.stopBroadcast()));
+      await this.stopBroadcast();
+    }, config.autoDisconnectMs);
+
+    this._autoDisconnectTimer.unref();
   }
 
   async stopBroadcast() {
@@ -288,6 +362,16 @@ class MasterBot {
     if (this._reconnectTimer) {
       clearTimeout(this._reconnectTimer);
       this._reconnectTimer = null;
+    }
+
+    if (this._watchdogInterval) {
+      clearInterval(this._watchdogInterval);
+      this._watchdogInterval = null;
+    }
+
+    if (this._autoDisconnectTimer) {
+      clearTimeout(this._autoDisconnectTimer);
+      this._autoDisconnectTimer = null;
     }
 
     for (const [, t] of this._speakerTimers) clearTimeout(t);
