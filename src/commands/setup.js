@@ -266,6 +266,39 @@ module.exports = {
       return interaction.update(buildStep(state, userId, relayCount, interaction.guild));
     }
 
+    if (action === "advanced_save") {
+      // Charger la config existante pour ne pas écraser les autres champs
+      const existing = configStore.load();
+      const toSave = {
+        ...existing,
+        adv_silenceThresholdMs:  state.adv_silenceThresholdMs,
+        adv_maxBufferFrames:     state.adv_maxBufferFrames,
+        adv_watchdogThresholdMs: state.adv_watchdogThresholdMs,
+        adv_autoDisconnectMs:    state.adv_autoDisconnectMs,
+        adv_logLevel:            state.adv_logLevel,
+      };
+      configStore.save(toSave);
+
+      config.silenceThresholdMs  = state.adv_silenceThresholdMs;
+      config.maxBufferFrames     = state.adv_maxBufferFrames;
+      config.watchdogThresholdMs = state.adv_watchdogThresholdMs;
+      config.autoDisconnectMs    = state.adv_autoDisconnectMs;
+      config.logLevel            = state.adv_logLevel;
+
+      wizardStates.delete(userId);
+      logger.info("Paramètres avancés sauvegardés via /setup", { user: interaction.user.tag });
+
+      return interaction.update({
+        embeds: [
+          new EmbedBuilder()
+            .setTitle("✅ Paramètres avancés sauvegardés !")
+            .setColor(0x57f287)
+            .setDescription("Les changements sont actifs immédiatement."),
+        ],
+        components: [],
+      });
+    }
+
     if (action === "advanced_edit") {
       const ms2min = (ms) => ms === 0 ? "0" : String(Math.round(ms / 60000));
       const modal = new ModalBuilder()
@@ -811,6 +844,10 @@ function buildAdvanced(state, userId) {
           .setCustomId(`setup:advanced_edit:${userId}`)
           .setLabel("✏️ Modifier")
           .setStyle(ButtonStyle.Primary),
+        new ButtonBuilder()
+          .setCustomId(`setup:advanced_save:${userId}`)
+          .setLabel("💾 Sauvegarder")
+          .setStyle(ButtonStyle.Success),
       ),
     ],
   };
