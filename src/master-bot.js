@@ -396,6 +396,16 @@ class MasterBot {
   // ── Commandes ─────────────────────────────────────────────────────────────
 
   async _handleInteraction(interaction) {
+    // ── Boutons /mute ──────────────────────────────────────────────────
+    if (interaction.isMessageComponent() && interaction.customId.startsWith("mute:")) {
+      try {
+        await muteCmd.handleComponent(interaction, this);
+      } catch (err) {
+        logger.error("Erreur mute component", { error: err.message });
+      }
+      return;
+    }
+
     // ── Composants du wizard /setup (boutons, menus) ───────────────────
     if (interaction.isMessageComponent() && interaction.customId.startsWith("setup:")) {
       try {

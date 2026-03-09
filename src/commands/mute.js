@@ -1,64 +1,83 @@
 "use strict";
 
-const { SlashCommandBuilder, EmbedBuilder } = require("discord.js");
+const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require("discord.js");
 const logger = require("../utils/logger").child("cmd:mute");
 
 module.exports = {
   data: new SlashCommandBuilder()
     .setName("mute")
-    .setDescription("Mute ou démute un relay bot (la team n'entend plus le broadcast)")
-    .addStringOption((opt) =>
-      opt.setName("relay")
-        .setDescription("Nom du relay bot à muter/démuter (vide = voir l'état actuel)")
-        .setRequired(false)
-    ),
+    .setDescription("Mute ou démute un relay bot (clique sur un bouton pour toggler)"),
+
+  // ── Commande slash ────────────────────────────────────────────────────────
 
   async execute(interaction, masterBot) {
     await interaction.deferReply({ flags: 64 });
+    await interaction.editReply(buildMutePanel(masterBot));
+  },
+
+  // ── Boutons ───────────────────────────────────────────────────────────────
+
+  async handleComponent(interaction, masterBot) {
+    // customId : "mute:toggle:relayId"
+    const parts   = interaction.customId.split(":");
+    const relayId = parts[2];
 
     const dispatcher = masterBot.dispatcher;
-    const relayBots  = masterBot._relayBots;
-    const query      = interaction.options.getString("relay")?.toLowerCase() ?? null;
+    const bot        = masterBot._relayBots.find((b) => b.relayId === relayId);
 
-    // ── Sans argument : afficher l'état de tous les relays ──────────────────
-    if (!query) {
-      const lines = relayBots.map((bot) => {
-        const muted = dispatcher.isRelayMuted(bot.relayId);
-        const status = bot.getStatus();
-        return `${muted ? "🔇" : "🔊"} **${bot.name}** — <#${bot.channelId}> ${muted ? "_(muté)_" : ""}${!status.connected ? " ⚠️" : ""}`;
-      });
-
-      return interaction.editReply({
-        embeds: [
-          new EmbedBuilder()
-            .setTitle("🔊 État des relay bots")
-            .setColor(0x5865f2)
-            .setDescription(lines.join("\n"))
-            .setFooter({ text: "Utilisez /mute <nom> pour muter/démuter un relay" }),
-        ],
-      });
-    }
-
-    // ── Avec argument : trouver le relay par nom ─────────────────────────────
-    if (!masterBot.isBroadcasting) {
-      return interaction.editReply("⚠️ Aucun broadcast en cours.");
-    }
-
-    const bot = relayBots.find((b) => b.name.toLowerCase().includes(query));
     if (!bot) {
-      const names = relayBots.map((b) => `\`${b.name}\``).join(", ");
-      return interaction.editReply(`❌ Relay introuvable. Relays disponibles : ${names}`);
+      return interaction.update(buildMutePanel(masterBot));
     }
 
-    const wasMuted = dispatcher.isRelayMuted(bot.relayId);
-    if (wasMuted) {
-      dispatcher.unmuteRelay(bot.relayId);
+    if (dispatcher.isRelayMuted(relayId)) {
+      dispatcher.unmuteRelay(relayId);
       logger.info("Relay démuté", { relay: bot.name, by: interaction.user.tag });
-      return interaction.editReply(`🔊 **${bot.name}** — <#${bot.channelId}> entend de nouveau le broadcast.`);
     } else {
-      dispatcher.muteRelay(bot.relayId);
+      dispatcher.muteRelay(relayId);
       logger.info("Relay muté", { relay: bot.name, by: interaction.user.tag });
-      return interaction.editReply(`🔇 **${bot.name}** — <#${bot.channelId}> ne reçoit plus le broadcast.`);
     }
+
+    return interaction.update(buildMutePanel(masterBot));
   },
 };
+
+// ── Helpers ───────────────────────────────────────────────────────────────
+
+function buildMutePanel(masterBot) {
+  const dispatcher = masterBot.dispatcher;
+  const relayBots  = masterBot._relayBots;
+
+  const lines = relayBots.map((bot) => {
+    const muted     = dispatcher.isRelayMuted(bot.relayId);
+    const connected = bot.getStatus().connected;
+    const icon      = muted ? "🔇" : "🔊";
+    const state     = muted ? " _(muté)_" : "";
+    const warn      = !connected ? " ⚠️" : "";
+    return `${icon} **${bot.name}** — <#${bot.channelId}>${state}${warn}`;
+  });
+
+  const embed = new EmbedBuilder()
+    .setTitle("🔊 État des relay bots")
+    .setColor(0x5865f2)
+    .setDescription(lines.join("\n"))
+    .setFooter({ text: "Cliquez sur un bouton pour muter/démuter" });
+
+  // Max 5 boutons par ActionRow → on découpe par tranches de 5
+  const rows = [];
+  for (let i = 0; i < relayBots.length; i += 5) {
+    const slice = relayBots.slice(i, i + 5);
+    rows.push(
+      new ActionRowBuilder().addComponents(
+        slice.map((bot) => {
+          const muted = dispatcher.isRelayMuted(bot.relayId);
+          return new ButtonBuilder()
+            .setCustomId(`mute:toggle:${bot.relayId}`)
+            .setLabel(muted ? `🔇 ${bot.name}` : `🔊 ${bot.name}`)
+            .setStyle(muted ? ButtonStyle.Danger : ButtonStyle.Success);
+        })
+      )
+    );
+  }
+
+  return { embeds: [embed], components: rows };
+}
