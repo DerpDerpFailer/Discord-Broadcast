@@ -23,8 +23,8 @@ src/
 ├── config.js             ← Lit les variables d'environnement + overlay JSON
 ├── config-store.js       ← Lecture/écriture de /data/config.json
 ├── dispatcher.js         ← Tick unique 20ms, mixage + dispatch audio
-├── master-bot.js         ← Capture audio Opus→PCM + gestion commandes
-├── relay-bot.js          ← Lecture audio dans canal cible
+├── master-bot.js         ← Capture audio Opus→PCM + gestion commandes + watchdog
+├── relay-bot.js          ← Lecture audio dans canal cible + reconnexion auto
 ├── voice/
 │   ├── audio-stream.js   ← ContinuousPCMStream (stream passif, pas de timer)
 │   └── mixer.js          ← Mixage PCM multi-speakers avec clamping int16
@@ -46,6 +46,8 @@ src/
 - **@snazzah/davey** — requis pour la compatibilité avec le nouveau chiffrement Discord voice (aead_xchacha20_poly1305_rtpsize)
 - **Config persistante** — `/setup` sauvegarde la config dans `/data/config.json` (volume Docker), qui surcharge les variables d'environnement
 
+---
+
 ## Prérequis
 
 ### Bots Discord à créer
@@ -66,19 +68,23 @@ Pour chaque bot :
 4. Permissions : `Connect`, `Speak`, `Use Voice Activity`
 5. Pour le Master Bot uniquement : ajouter `View Channels`
 
+> **Salon d'alertes** : le Master Bot doit avoir les permissions **Voir le salon** et **Envoyer des messages** sur le salon d'alertes configuré.
+
 ### Récupérer les IDs
 
 Activer le Mode Développeur (Paramètres Discord → Avancés) :
 - **Guild ID** : clic droit sur le serveur → Copier l'identifiant
-- **Channel ID** : clic droit sur le canal vocal → Copier l'identifiant
+- **Channel ID** : clic droit sur le canal vocal/texte → Copier l'identifiant
 - **Role ID** : Paramètres serveur → Rôles → clic droit → Copier l'identifiant
+
+---
 
 ## Déploiement Portainer
 
 ### 1. Créer la Stack
 
 Portainer → **Stacks** → **Add stack** → **Repository**
-- URL : `https://github.com/TON-USERNAME/discord-broadcast`
+- URL : `https://github.com/DerpDerpFailer/Discord-Broadcast`
 - Branch : `main`
 - Compose path : `docker-compose.yml`
 
@@ -90,16 +96,16 @@ Dans la section **Environment variables** :
 |---|---|
 | `MASTER_BOT_TOKEN` | Token du bot maître |
 | `GUILD_ID` | ID du serveur Discord |
-| `SOURCE_CHANNEL_ID` | ID du canal Shotcallers (remplaçable via /setup) |
-| `SHOTCALLER_ROLE_ID` | ID du rôle autorisé (remplaçable via /setup) |
+| `SOURCE_CHANNEL_ID` | ID du canal Shotcallers (modifiable via /setup) |
+| `SHOTCALLER_ROLE_ID` | ID du rôle Shotcaller (modifiable via /setup) |
 | `RELAY_BOT_TOKEN_1` | Token relay bot 1 |
-| `TARGET_CHANNEL_ID_1` | ID canal Team 1 (remplaçable via /setup) |
-| `RELAY_BOT_NAME_1` | `Team 1` (remplaçable via /setup) |
+| `TARGET_CHANNEL_ID_1` | ID canal Team 1 (modifiable via /setup) |
+| `RELAY_BOT_NAME_1` | `Team 1` (modifiable via /setup) |
 | `RELAY_BOT_TOKEN_2` | Token relay bot 2 |
 | `TARGET_CHANNEL_ID_2` | ID canal Team 2 |
 | … | … |
 
-> **Note** : Les tokens des bots ne peuvent pas être modifiés via `/setup` pour des raisons de sécurité. Tous les autres paramètres sont configurables interactivement.
+> Les tokens des bots ne peuvent pas être modifiés via `/setup` pour des raisons de sécurité. Tous les autres paramètres sont configurables interactivement.
 
 ### 3. Deploy the stack
 
@@ -122,30 +128,100 @@ Résultat attendu :
    /setup  — Configure le système de broadcast vocal
 ```
 
+---
+
 ## Utilisation
 
-Dans Discord (avec le rôle Shotcaller) :
+### Permissions par rôle
+
+| Action | Shotcaller | Staff | Administrateur |
+|---|---|---|---|
+| Voix broadcastée | ✅ | ❌ | ❌ |
+| /start /stop /status | ✅ | ✅ | ❌ |
+| /setup | ❌ | ❌ | ✅ |
+
+> Si le rôle Shotcaller n'existe pas encore sur le serveur, le fallback est **Administrateur** pour permettre le bootstrap initial via `/setup`.
+
+### Commandes Discord
 
 | Commande | Effet |
 |---|---|
 | `/start` | Tous les bots rejoignent leurs canaux, broadcast actif |
 | `/stop` | Tous les bots quittent leurs canaux |
-| `/status` | Affiche l'état, les speakers actifs, les stats |
+| `/status` | Affiche l'état, les speakers actifs, les stats par relay |
 | `/setup` | Lance le wizard de configuration interactif |
 
-### Wizard /setup
+---
 
-Le wizard guide étape par étape :
+## Wizard /setup
+
+Le wizard guide étape par étape. Un bouton **Suivant →** apparaît dès qu'une valeur est déjà configurée pour ne pas refaire les étapes inutilement :
 
 ```
-Étape 0 → Accueil
-Étape 1 → Sélection du canal source (menu déroulant des canaux vocaux)
-Étape 2 → Sélection du rôle autorisé
-Étape 3 → Configuration de chaque relay bot (canal cible + nom)
-Étape 4 → Récapitulatif + Sauvegarder
+Étape 0 → Accueil  (+ accès direct aux Paramètres avancés)
+Étape 1 → Canal source (recherche par nom)
+Étape 2 → Rôle Shotcaller
+Étape 3 → Rôle Staff (optionnel)
+Étape 4 → Salon d'alertes (optionnel)
+Étape 5 → Canal cible de chaque relay bot (un par un)
+Étape 6 → Récapitulatif + Sauvegarder  (+ accès aux Paramètres avancés)
+Étape 7 → Paramètres avancés
 ```
 
-La configuration est sauvegardée dans `/data/config.json` (volume Docker persistant) et s'applique **immédiatement** sans redémarrage. Relancez simplement `/start` pour utiliser les nouveaux canaux.
+### Paramètres avancés (/setup → 🔧)
+
+Accessible depuis l'accueil et le récapitulatif :
+
+| Paramètre | Défaut | Description |
+|---|---|---|
+| Silence avant arrêt speaker | `150 ms` | Délai avant de libérer un speaker silencieux |
+| Buffer max par speaker | `25 frames` | 500ms de buffer — au-delà les frames sont droppées |
+| Watchdog pipeline | `5000 ms` | Redémarre le pipeline si bloqué (0 = désactivé) |
+| Auto-disconnect | `10 min` | Arrête le broadcast après X min d'inactivité (0 = désactivé) |
+| Niveau de log | `info` | `error` / `warn` / `info` / `debug` |
+
+La configuration est sauvegardée dans `/data/config.json` et s'applique **immédiatement** sans redémarrage.
+
+---
+
+## Robustesse
+
+### Reconnexion automatique (backoff exponentiel)
+
+Si un relay bot perd sa connexion voice, il tente de se reconnecter automatiquement :
+
+- Délais : 2s → 4s → 8s → 16s → 30s (max)
+- Après 3 tentatives échouées (~54s) : alerte envoyée dans le salon d'alertes
+- À la reconnexion : alerte de rétablissement envoyée
+
+### Watchdog pipeline
+
+Vérifie toutes les `WATCHDOG_THRESHOLD_MS` que le pipeline audio n'est pas bloqué :
+
+- Si un speaker est actif **et** qu'aucune frame n'a été émise depuis plus de 5s → redémarrage automatique du pipeline
+- N'intervient jamais si aucun speaker n'est actif (pas de faux positif lors des pauses naturelles)
+- Envoie une alerte Discord avant de redémarrer
+
+### Auto-disconnect
+
+Si le canal source est inactif depuis `AUTO_DISCONNECT_MS` (défaut 10 min) :
+
+- Arrêt propre de tous les relay bots puis du master
+- Alerte Discord envoyée
+- Relancer `/start` pour reprendre le broadcast
+
+### Alertes Discord
+
+Les alertes sont envoyées dans le salon configuré via `/setup` pour :
+
+- Déconnexion d'un relay bot après 3 tentatives échouées
+- Rétablissement d'un relay bot
+- Déclenchement du watchdog pipeline
+- Auto-disconnect pour inactivité prolongée
+
+> Si les alertes n'arrivent pas, vérifier que le Master Bot a les permissions **Voir le salon** et **Envoyer des messages** sur le salon d'alertes. Les logs indiquent la cause exacte en cas d'échec.
+
+---
 
 ## Variables d'environnement complètes
 
@@ -153,17 +229,21 @@ La configuration est sauvegardée dans `/data/config.json` (volume Docker persis
 |---|---|---|
 | `MASTER_BOT_TOKEN` | — | **Requis** |
 | `GUILD_ID` | — | **Requis** |
-| `SOURCE_CHANNEL_ID` | — | **Requis** (surchargeble via /setup) |
-| `SHOTCALLER_ROLE_ID` | — | **Requis** (surchargeble via /setup) |
+| `SOURCE_CHANNEL_ID` | — | **Requis** (modifiable via /setup) |
+| `SHOTCALLER_ROLE_ID` | — | **Requis** (modifiable via /setup) |
+| `STAFF_ROLE_ID` | — | Optionnel (modifiable via /setup) |
+| `ALERT_CHANNEL_ID` | — | Optionnel (modifiable via /setup) |
 | `RELAY_BOT_TOKEN_N` | — | **Requis** (N = 1 à 20) |
-| `TARGET_CHANNEL_ID_N` | — | **Requis** (N = 1 à 20, surchargeble via /setup) |
-| `RELAY_BOT_NAME_N` | `Relay N` | Optionnel (surchargeble via /setup) |
+| `TARGET_CHANNEL_ID_N` | — | **Requis** (N = 1 à 20, modifiable via /setup) |
+| `RELAY_BOT_NAME_N` | `Relay N` | Optionnel (modifiable via /setup) |
 | `FRAME_DURATION_MS` | `20` | Ne pas modifier |
 | `PCM_FRAME_SIZE` | `3840` | Ne pas modifier |
 | `JITTER_BUFFER_FRAMES` | `2` | Non utilisé (architecture passive) |
-| `MAX_BUFFER_FRAMES` | `25` | Taille max queue par speaker |
-| `SILENCE_THRESHOLD_MS` | `1000` | Délai silence avant arrêt du pipeline |
-| `LOG_LEVEL` | `info` | `error/warn/info/debug` |
+| `MAX_BUFFER_FRAMES` | `25` | Buffer max par speaker (modifiable via /setup) |
+| `SILENCE_THRESHOLD_MS` | `150` | Délai silence avant arrêt speaker (modifiable via /setup) |
+| `WATCHDOG_THRESHOLD_MS` | `5000` | Watchdog pipeline, 0 = désactivé (modifiable via /setup) |
+| `AUTO_DISCONNECT_MS` | `600000` | Auto-disconnect, 0 = désactivé (modifiable via /setup) |
+| `LOG_LEVEL` | `info` | `error/warn/info/debug` (modifiable via /setup) |
 | `CONFIG_PATH` | `/data/config.json` | Chemin du fichier de config persistante |
 
 ## Priorité de configuration
@@ -171,17 +251,18 @@ La configuration est sauvegardée dans `/data/config.json` (volume Docker persis
 ```
 /data/config.json  (via /setup)   ← priorité haute
        +
-Variables d'environnement         ← fallback
+Variables d'environnement         ← fallback au démarrage
 ```
 
 Les variables d'environnement sont toujours requises au démarrage. `/setup` les surcharge ensuite sans redémarrage.
 
-## Notes de déploiement importantes
+---
+
+## Notes de déploiement
 
 ### Réseau
 - `network_mode: host` est requis dans `docker-compose.yml` — ne pas utiliser le bridge Docker
 - Aucune redirection de port nécessaire — toutes les connexions sont sortantes vers Discord
-- Pas besoin de DMZ
 
 ### Connexion voice
 Les bots peuvent mettre jusqu'à 60 secondes pour établir la connexion voice (normal sur certains réseaux). Le système attend automatiquement l'événement `Ready` sans timeout bloquant.
@@ -191,13 +272,15 @@ Discord impose depuis 2025 le mode `aead_xchacha20_poly1305_rtpsize`. Le package
 
 ### Rollback
 ```bash
-# Revenir à la version stable taguée
-git checkout v1.0.0
+# Revenir à une version taguée
+git checkout vX.Y.Z
 
 # Revenir à l'image Docker stable
-sudo docker tag discord-broadcast:v1.0.0 discord-broadcast:latest
+sudo docker tag discord-broadcast:vX.Y.Z discord-broadcast:latest
 sudo docker restart discord-broadcast
 ```
+
+---
 
 ## Tests
 
@@ -207,7 +290,16 @@ docker exec discord-broadcast npm test
 
 # Benchmark latence interne
 docker exec discord-broadcast node tests/bench-latency.js
+
+# Vérifier la config chargée
+docker exec discord-broadcast node -e "const c = require('./src/config'); console.log(JSON.stringify(c, null, 2))"
+
+# Tester le système d'alertes (couper Discord ~60s puis rétablir)
+sudo iptables -A OUTPUT -d 162.159.0.0/16 -j DROP
+sudo iptables -D OUTPUT -d 162.159.0.0/16 -j DROP
 ```
+
+---
 
 ## Latence
 
@@ -217,6 +309,8 @@ docker exec discord-broadcast node tests/bench-latency.js
 | Encode Opus | ~2 ms |
 | Réseau Discord | 50–150 ms |
 | **Total** | **~75–200 ms ✅** |
+
+---
 
 ## Licence
 
