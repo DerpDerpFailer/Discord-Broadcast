@@ -6,60 +6,59 @@ const logger = require("../utils/logger").child("cmd:mute");
 module.exports = {
   data: new SlashCommandBuilder()
     .setName("mute")
-    .setDescription("Mute ou démute un speaker du broadcast")
-    .addUserOption((opt) =>
-      opt.setName("utilisateur")
-        .setDescription("Le speaker à muter/démuter (vide = voir l'état actuel)")
+    .setDescription("Mute ou démute un relay bot (la team n'entend plus le broadcast)")
+    .addStringOption((opt) =>
+      opt.setName("relay")
+        .setDescription("Nom du relay bot à muter/démuter (vide = voir l'état actuel)")
         .setRequired(false)
     ),
 
-  /**
-   * @param {import('discord.js').ChatInputCommandInteraction} interaction
-   * @param {import('../master-bot')} masterBot
-   */
   async execute(interaction, masterBot) {
-    await interaction.deferReply({ ephemeral: true });
+    await interaction.deferReply({ flags: 64 });
 
     const dispatcher = masterBot.dispatcher;
-    const target     = interaction.options.getUser("utilisateur");
+    const relayBots  = masterBot._relayBots;
+    const query      = interaction.options.getString("relay")?.toLowerCase() ?? null;
 
-    // ── Sans argument : afficher l'état actuel ──────────────────────────────
-    if (!target) {
-      const activeSpeakers = masterBot.getStatus().activeSpeakers;
-
-      if (activeSpeakers.length === 0) {
-        return interaction.editReply("🎤 Aucun speaker actif en ce moment.");
-      }
-
-      const lines = activeSpeakers.map((userId) => {
-        const muted = dispatcher.isMuted(userId);
-        return `${muted ? "🔇" : "🔊"} <@${userId}> — ${muted ? "Muté" : "Actif"}`;
+    // ── Sans argument : afficher l'état de tous les relays ──────────────────
+    if (!query) {
+      const lines = relayBots.map((bot) => {
+        const muted = dispatcher.isRelayMuted(bot.relayId);
+        const status = bot.getStatus();
+        return `${muted ? "🔇" : "🔊"} **${bot.name}** — <#${bot.channelId}> ${muted ? "_(muté)_" : ""}${!status.connected ? " ⚠️" : ""}`;
       });
 
-      const embed = new EmbedBuilder()
-        .setTitle("🎤 État des speakers")
-        .setColor(0x5865f2)
-        .setDescription(lines.join("\n"));
-
-      return interaction.editReply({ embeds: [embed] });
+      return interaction.editReply({
+        embeds: [
+          new EmbedBuilder()
+            .setTitle("🔊 État des relay bots")
+            .setColor(0x5865f2)
+            .setDescription(lines.join("\n"))
+            .setFooter({ text: "Utilisez /mute <nom> pour muter/démuter un relay" }),
+        ],
+      });
     }
 
-    // ── Avec argument : toggle mute ─────────────────────────────────────────
+    // ── Avec argument : trouver le relay par nom ─────────────────────────────
     if (!masterBot.isBroadcasting) {
       return interaction.editReply("⚠️ Aucun broadcast en cours.");
     }
 
-    const userId  = target.id;
-    const wasMuted = dispatcher.isMuted(userId);
+    const bot = relayBots.find((b) => b.name.toLowerCase().includes(query));
+    if (!bot) {
+      const names = relayBots.map((b) => `\`${b.name}\``).join(", ");
+      return interaction.editReply(`❌ Relay introuvable. Relays disponibles : ${names}`);
+    }
 
+    const wasMuted = dispatcher.isRelayMuted(bot.relayId);
     if (wasMuted) {
-      dispatcher.unmute(userId);
-      logger.info("Démute", { target: target.tag, by: interaction.user.tag });
-      return interaction.editReply(`🔊 **${target.displayName}** est de nouveau audible.`);
+      dispatcher.unmuteRelay(bot.relayId);
+      logger.info("Relay démuté", { relay: bot.name, by: interaction.user.tag });
+      return interaction.editReply(`🔊 **${bot.name}** — <#${bot.channelId}> entend de nouveau le broadcast.`);
     } else {
-      dispatcher.mute(userId);
-      logger.info("Mute", { target: target.tag, by: interaction.user.tag });
-      return interaction.editReply(`🔇 **${target.displayName}** est maintenant muté.`);
+      dispatcher.muteRelay(bot.relayId);
+      logger.info("Relay muté", { relay: bot.name, by: interaction.user.tag });
+      return interaction.editReply(`🔇 **${bot.name}** — <#${bot.channelId}> ne reçoit plus le broadcast.`);
     }
   },
 };

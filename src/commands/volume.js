@@ -6,10 +6,10 @@ const logger = require("../utils/logger").child("cmd:volume");
 module.exports = {
   data: new SlashCommandBuilder()
     .setName("volume")
-    .setDescription("Ajuste le volume d'un speaker (0-200%)")
-    .addUserOption((opt) =>
-      opt.setName("utilisateur")
-        .setDescription("Le speaker à ajuster (vide = voir tous les volumes)")
+    .setDescription("Ajuste le volume d'un relay bot (0-200%)")
+    .addStringOption((opt) =>
+      opt.setName("relay")
+        .setDescription("Nom du relay bot (vide = voir tous les volumes)")
         .setRequired(false)
     )
     .addIntegerOption((opt) =>
@@ -20,59 +20,60 @@ module.exports = {
         .setRequired(false)
     ),
 
-  /**
-   * @param {import('discord.js').ChatInputCommandInteraction} interaction
-   * @param {import('../master-bot')} masterBot
-   */
   async execute(interaction, masterBot) {
-    await interaction.deferReply({ ephemeral: true });
+    await interaction.deferReply({ flags: 64 });
 
     const dispatcher = masterBot.dispatcher;
-    const target     = interaction.options.getUser("utilisateur");
+    const relayBots  = masterBot._relayBots;
+    const query      = interaction.options.getString("relay")?.toLowerCase() ?? null;
     const value      = interaction.options.getInteger("valeur");
 
     // ── Sans argument : afficher tous les volumes ───────────────────────────
-    if (!target) {
-      const activeSpeakers = masterBot.getStatus().activeSpeakers;
-
-      if (activeSpeakers.length === 0) {
-        return interaction.editReply("🎤 Aucun speaker actif en ce moment.");
-      }
-
-      const lines = activeSpeakers.map((userId) => {
-        const vol   = dispatcher.getVolume(userId);
+    if (!query) {
+      const lines = relayBots.map((bot) => {
+        const vol   = dispatcher.getRelayVolume(bot.relayId);
+        const muted = dispatcher.isRelayMuted(bot.relayId);
         const bar   = volumeBar(vol);
-        return `🎚️ <@${userId}> — **${vol}%** ${bar}`;
+        return `🎚️ **${bot.name}** — **${vol}%** ${bar}${muted ? " 🔇" : ""}`;
       });
 
-      const embed = new EmbedBuilder()
-        .setTitle("🎚️ Volumes des speakers")
-        .setColor(0x5865f2)
-        .setDescription(lines.join("\n"))
-        .setFooter({ text: "Utilisez /volume @user <valeur> pour ajuster" });
-
-      return interaction.editReply({ embeds: [embed] });
+      return interaction.editReply({
+        embeds: [
+          new EmbedBuilder()
+            .setTitle("🎚️ Volumes des relay bots")
+            .setColor(0x5865f2)
+            .setDescription(lines.join("\n"))
+            .setFooter({ text: "Utilisez /volume <nom> <valeur> pour ajuster" }),
+        ],
+      });
     }
 
-    // ── Avec utilisateur mais sans valeur : afficher son volume ─────────────
+    // ── Trouver le relay ────────────────────────────────────────────────────
+    const bot = relayBots.find((b) => b.name.toLowerCase().includes(query));
+    if (!bot) {
+      const names = relayBots.map((b) => `\`${b.name}\``).join(", ");
+      return interaction.editReply(`❌ Relay introuvable. Relays disponibles : ${names}`);
+    }
+
+    // ── Sans valeur : afficher le volume actuel ─────────────────────────────
     if (value === null) {
-      const vol = dispatcher.getVolume(target.id);
+      const vol = dispatcher.getRelayVolume(bot.relayId);
       return interaction.editReply(
-        `🎚️ **${target.displayName}** : volume actuel à **${vol}%** ${volumeBar(vol)}`
+        `🎚️ **${bot.name}** — volume actuel : **${vol}%** ${volumeBar(vol)}`
       );
     }
 
-    // ── Avec utilisateur et valeur : ajuster ────────────────────────────────
+    // ── Avec valeur : ajuster ───────────────────────────────────────────────
     if (!masterBot.isBroadcasting) {
       return interaction.editReply("⚠️ Aucun broadcast en cours.");
     }
 
-    dispatcher.setVolume(target.id, value);
-    logger.info("Volume ajusté", { target: target.tag, value, by: interaction.user.tag });
+    dispatcher.setRelayVolume(bot.relayId, value);
+    logger.info("Volume relay ajusté", { relay: bot.name, value, by: interaction.user.tag });
 
     const emoji = value === 0 ? "🔇" : value < 50 ? "🔈" : value <= 120 ? "🔉" : "🔊";
     return interaction.editReply(
-      `${emoji} **${target.displayName}** : volume réglé à **${value}%** ${volumeBar(value)}`
+      `${emoji} **${bot.name}** — <#${bot.channelId}> réglé à **${value}%** ${volumeBar(value)}`
     );
   },
 };

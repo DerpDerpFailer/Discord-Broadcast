@@ -27,11 +27,11 @@ class AudioDispatcher extends EventEmitter {
     /** @type {Map<string, import('./voice/audio-stream')>} relayId → stream */
     this._relayStreams = new Map();
 
-    /** @type {Set<string>} userIds mutés */
-    this._mutedSpeakers = new Set();
+    /** @type {Set<string>} relayIds mutés */
+    this._mutedRelays = new Set();
 
-    /** @type {Map<string, number>} userId → volume (0.0 à 2.0, défaut 1.0) */
-    this._speakerVolumes = new Map();
+    /** @type {Map<string, number>} relayId → volume (0.0 à 2.0, défaut 1.0) */
+    this._relayVolumes = new Map();
 
     this._running  = false;
     this._interval = null;
@@ -57,35 +57,35 @@ class AudioDispatcher extends EventEmitter {
     logger.info(`Relay désenregistré`, { relayId, total: this._relayStreams.size });
   }
 
-  // ── Mute / Volume ─────────────────────────────────────────────────────────
+  // ── Mute / Volume (par relay) ─────────────────────────────────────────────
 
-  mute(userId) {
-    this._mutedSpeakers.add(userId);
-    logger.info(`Speaker muté`, { userId });
+  muteRelay(relayId) {
+    this._mutedRelays.add(relayId);
+    logger.info(`Relay muté`, { relayId });
   }
 
-  unmute(userId) {
-    this._mutedSpeakers.delete(userId);
-    logger.info(`Speaker démuté`, { userId });
+  unmuteRelay(relayId) {
+    this._mutedRelays.delete(relayId);
+    logger.info(`Relay démuté`, { relayId });
   }
 
-  isMuted(userId) {
-    return this._mutedSpeakers.has(userId);
+  isRelayMuted(relayId) {
+    return this._mutedRelays.has(relayId);
   }
 
-  setVolume(userId, volume) {
-    // volume : 0 à 200 (%) → on stocke en 0.0 à 2.0
-    const v = Math.max(0, Math.min(2.0, volume / 100));
+  setRelayVolume(relayId, percent) {
+    // percent : 0 à 200 → on stocke en 0.0 à 2.0
+    const v = Math.max(0, Math.min(2.0, percent / 100));
     if (v === 1.0) {
-      this._speakerVolumes.delete(userId); // défaut → pas besoin de stocker
+      this._relayVolumes.delete(relayId); // défaut → pas besoin de stocker
     } else {
-      this._speakerVolumes.set(userId, v);
+      this._relayVolumes.set(relayId, v);
     }
-    logger.info(`Volume ajusté`, { userId, percent: volume, factor: v });
+    logger.info(`Volume relay ajusté`, { relayId, percent, factor: v });
   }
 
-  getVolume(userId) {
-    return Math.round((this._speakerVolumes.get(userId) ?? 1.0) * 100);
+  getRelayVolume(relayId) {
+    return Math.round((this._relayVolumes.get(relayId) ?? 1.0) * 100);
   }
 
   // ── Réception audio ───────────────────────────────────────────────────────
@@ -176,12 +176,7 @@ class AudioDispatcher extends EventEmitter {
 
     for (const [userId, queue] of this._speakerQueues) {
       if (queue.length > 0) {
-        const frame = queue.shift();
-        // Ignorer les speakers mutés
-        if (!this._mutedSpeakers.has(userId)) {
-          const vol = this._speakerVolumes.get(userId);
-          frames.push(vol != null ? applyVolume(frame, vol) : frame);
-        }
+        frames.push(queue.shift());
       }
       // Nettoyer les queues vides (le speaker a fini)
       if (queue.length === 0) {
@@ -200,9 +195,14 @@ class AudioDispatcher extends EventEmitter {
 
     for (const [relayId, stream] of this._relayStreams) {
       try {
-        stream.pushFrame(mixed);
-        this._stats.totalFramesDispatched++;
-        this._lastFrameAt = Date.now();
+        if (this._mutedRelays.has(relayId)) {
+          stream.pushSilence();
+        } else {
+          const vol = this._relayVolumes.get(relayId);
+          stream.pushFrame(vol != null ? applyVolume(mixed, vol) : mixed);
+          this._stats.totalFramesDispatched++;
+          this._lastFrameAt = Date.now();
+        }
       } catch (err) {
         logger.error(`Erreur push frame relay`, { relayId, error: err.message });
       }
