@@ -25,6 +25,8 @@ const startCmd  = require("./commands/start");
 const stopCmd   = require("./commands/stop");
 const statusCmd = require("./commands/status");
 const setupCmd  = require("./commands/setup");
+const muteCmd   = require("./commands/mute");
+const volumeCmd = require("./commands/volume");
 
 // Backoff exponentiel : 2s, 4s, 8s, 16s, 30s max
 const RECONNECT_DELAYS = [2000, 4000, 8000, 16000, 30000];
@@ -53,6 +55,8 @@ class MasterBot {
     this.commands.set("stop",   stopCmd);
     this.commands.set("status", statusCmd);
     this.commands.set("setup",  setupCmd);
+    this.commands.set("mute",   muteCmd);
+    this.commands.set("volume", volumeCmd);
   }
 
   // ── Connexion Discord ─────────────────────────────────────────────────────
@@ -82,7 +86,7 @@ class MasterBot {
 
   /** Enregistre les slash commands (à appeler une fois). */
   async registerCommands() {
-    const body = [startCmd, stopCmd, statusCmd, setupCmd].map((c) => c.data.toJSON());
+    const body = [startCmd, stopCmd, statusCmd, setupCmd, muteCmd, volumeCmd].map((c) => c.data.toJSON());
     const rest = new REST().setToken(config.masterToken);
 
     await rest.put(
@@ -342,9 +346,10 @@ class MasterBot {
     this._autoDisconnectTimer = setTimeout(async () => {
       if (!this._broadcasting || this._activeSpeakers.size > 0) return;
 
-      const idleSec = Math.round(config.autoDisconnectMs / 1000);
-      logger.info(`Canal source inactif depuis ${idleSec}s — déconnexion automatique`);
-      this.sendAlert(`💤 **Auto-disconnect** — Aucune activité depuis ${idleSec}s. Le broadcast s'arrête pour économiser les ressources. Relancez \`/start\` quand nécessaire.`);
+      const idleMin = Math.round(config.autoDisconnectMs / 60000);
+      const idleStr = idleMin >= 1 ? `${idleMin} min` : `${Math.round(config.autoDisconnectMs / 1000)}s`;
+      logger.info(`Canal source inactif depuis ${idleStr} — déconnexion automatique`);
+      this.sendAlert(`💤 **Auto-disconnect** — Aucune activité depuis ${idleStr}. Le broadcast s'arrête pour économiser les ressources. Relancez \`/start\` quand nécessaire.`);
 
       // Arrêter tous les relays puis le master
       await Promise.allSettled(this._relayBots.map((b) => b.stopBroadcast()));

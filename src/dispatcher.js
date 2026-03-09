@@ -14,7 +14,7 @@
 
 const EventEmitter = require("events");
 const config       = require("./config");
-const { mixPcm }   = require("./voice/mixer");
+const { mixPcm, applyVolume } = require("./voice/mixer");
 const logger       = require("./utils/logger").child("Dispatcher");
 
 class AudioDispatcher extends EventEmitter {
@@ -26,6 +26,12 @@ class AudioDispatcher extends EventEmitter {
 
     /** @type {Map<string, import('./voice/audio-stream')>} relayId → stream */
     this._relayStreams = new Map();
+
+    /** @type {Set<string>} userIds mutés */
+    this._mutedSpeakers = new Set();
+
+    /** @type {Map<string, number>} userId → volume (0.0 à 2.0, défaut 1.0) */
+    this._speakerVolumes = new Map();
 
     this._running  = false;
     this._interval = null;
@@ -49,6 +55,37 @@ class AudioDispatcher extends EventEmitter {
   unregisterRelay(relayId) {
     this._relayStreams.delete(relayId);
     logger.info(`Relay désenregistré`, { relayId, total: this._relayStreams.size });
+  }
+
+  // ── Mute / Volume ─────────────────────────────────────────────────────────
+
+  mute(userId) {
+    this._mutedSpeakers.add(userId);
+    logger.info(`Speaker muté`, { userId });
+  }
+
+  unmute(userId) {
+    this._mutedSpeakers.delete(userId);
+    logger.info(`Speaker démuté`, { userId });
+  }
+
+  isMuted(userId) {
+    return this._mutedSpeakers.has(userId);
+  }
+
+  setVolume(userId, volume) {
+    // volume : 0 à 200 (%) → on stocke en 0.0 à 2.0
+    const v = Math.max(0, Math.min(2.0, volume / 100));
+    if (v === 1.0) {
+      this._speakerVolumes.delete(userId); // défaut → pas besoin de stocker
+    } else {
+      this._speakerVolumes.set(userId, v);
+    }
+    logger.info(`Volume ajusté`, { userId, percent: volume, factor: v });
+  }
+
+  getVolume(userId) {
+    return Math.round((this._speakerVolumes.get(userId) ?? 1.0) * 100);
   }
 
   // ── Réception audio ───────────────────────────────────────────────────────
@@ -139,7 +176,12 @@ class AudioDispatcher extends EventEmitter {
 
     for (const [userId, queue] of this._speakerQueues) {
       if (queue.length > 0) {
-        frames.push(queue.shift());
+        const frame = queue.shift();
+        // Ignorer les speakers mutés
+        if (!this._mutedSpeakers.has(userId)) {
+          const vol = this._speakerVolumes.get(userId);
+          frames.push(vol != null ? applyVolume(frame, vol) : frame);
+        }
       }
       // Nettoyer les queues vides (le speaker a fini)
       if (queue.length === 0) {
