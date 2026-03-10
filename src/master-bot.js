@@ -25,8 +25,8 @@ const startCmd  = require("./commands/start");
 const stopCmd   = require("./commands/stop");
 const statusCmd = require("./commands/status");
 const setupCmd  = require("./commands/setup");
-const muteCmd   = require("./commands/mute");
-const volumeCmd = require("./commands/volume");
+const muteCmd    = require("./commands/mute");
+const volumeCmd  = require("./commands/volume");
 
 // Backoff exponentiel : 2s, 4s, 8s, 16s, 30s max
 const RECONNECT_DELAYS = [2000, 4000, 8000, 16000, 30000];
@@ -55,8 +55,8 @@ class MasterBot {
     this.commands.set("stop",   stopCmd);
     this.commands.set("status", statusCmd);
     this.commands.set("setup",  setupCmd);
-    this.commands.set("mute",   muteCmd);
-    this.commands.set("volume", volumeCmd);
+    this.commands.set("mute",    muteCmd);
+    this.commands.set("volume",  volumeCmd);
   }
 
   // ── Connexion Discord ─────────────────────────────────────────────────────

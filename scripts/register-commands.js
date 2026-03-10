@@ -46,9 +46,6 @@ const commands = [
   new SlashCommandBuilder()
     .setName("volume")
     .setDescription("Ajuste le volume d'un relay bot (panel interactif)"),
-  new SlashCommandBuilder()
-    .setName("restart")
-    .setDescription("Redémarre le broadcast (stop + start enchaînés)"),
 ].map((c) => c.toJSON());
 
 (async () => {
