@@ -113,7 +113,9 @@ Dans la section **Environment variables** :
 
 Cliquez **Deploy the stack**.
 
-### 4. Enregistrer les commandes slash (une seule fois)
+### 4. Enregistrer les commandes slash (à faire manuellement)
+
+Les commandes Discord **persistent indéfiniment** — il suffit de les enregistrer une seule fois, ou après avoir ajouté/modifié une commande.
 
 Portainer → Containers → `discord-broadcast` → **Console** → Connect
 
@@ -121,14 +123,7 @@ Portainer → Containers → `discord-broadcast` → **Console** → Connect
 node scripts/register-commands.js
 ```
 
-Résultat attendu :
-```
-✅ 4 commandes enregistrées :
-   /start  — Démarre le broadcast vocal...
-   /stop   — Arrête le broadcast vocal
-   /status — Affiche le statut du système de broadcast
-   /setup  — Configure le système de broadcast vocal
-```
+> ⚠️ Ne pas confondre avec le redéploiement normal (Pull and redeploy) — celui-ci ne nécessite **pas** de réenregistrer les commandes.
 
 ---
 
