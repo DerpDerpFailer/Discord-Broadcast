@@ -406,6 +406,26 @@ class MasterBot {
       return;
     }
 
+    // ── Boutons /volume ────────────────────────────────────────────────
+    if (interaction.isMessageComponent() && interaction.customId.startsWith("volume:")) {
+      try {
+        await volumeCmd.handleComponent(interaction, this);
+      } catch (err) {
+        logger.error("Erreur volume component", { error: err.message });
+      }
+      return;
+    }
+
+    // ── Modales /volume ────────────────────────────────────────────────
+    if (interaction.isModalSubmit() && interaction.customId.startsWith("volume_modal:")) {
+      try {
+        await volumeCmd.handleModal(interaction, this);
+      } catch (err) {
+        logger.error("Erreur volume modal", { error: err.message });
+      }
+      return;
+    }
+
     // ── Composants du wizard /setup (boutons, menus) ───────────────────
     if (interaction.isMessageComponent() && interaction.customId.startsWith("setup:")) {
       try {
