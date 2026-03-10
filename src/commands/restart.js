@@ -10,30 +10,27 @@ module.exports = {
     .setDescription("Redémarre le broadcast (stop + start enchaînés)"),
 
   async execute(interaction, masterBot) {
-    await interaction.deferReply();
-    logger.info("Commande restart reçue", { user: interaction.user.tag });
+    // Répondre immédiatement — Discord exige une réponse dans les 3s
+    await interaction.reply({ content: "🔄 **Redémarrage…** Arrêt en cours...", fetchReply: true });
 
-    // ── 1. Stop ────────────────────────────────────────────────────────────
-    if (masterBot.isBroadcasting) {
-      await interaction.editReply("🔄 **Redémarrage…** Arrêt en cours...");
-      try {
-        await Promise.allSettled(masterBot._relayBots.map((b) => b.stopBroadcast()));
-        await masterBot.stopBroadcast();
-      } catch (err) {
-        logger.error("Erreur stop durant restart", { error: err.message });
-        return interaction.editReply(`❌ Échec à l'arrêt : ${err.message}`);
-      }
-    } else {
-      await interaction.editReply("🔄 **Redémarrage…** (aucun broadcast actif, démarrage direct)");
-    }
-
-    // Petite pause pour laisser Discord libérer les slots voice
-    await new Promise((r) => setTimeout(r, 1500));
-
-    // ── 2. Start ───────────────────────────────────────────────────────────
-    await interaction.editReply("🔄 **Redémarrage…** Connexion en cours...");
+    const edit = (content) =>
+      interaction.editReply({ content }).catch((err) =>
+        logger.warn("editReply échoué", { error: err.message })
+      );
 
     try {
+      // ── 1. Stop ──────────────────────────────────────────────────────
+      if (masterBot.isBroadcasting) {
+        await Promise.allSettled(masterBot._relayBots.map((b) => b.stopBroadcast()));
+        await masterBot.stopBroadcast();
+      }
+
+      await edit("🔄 **Redémarrage…** Connexion en cours...");
+
+      // Pause pour laisser Discord libérer les slots voice
+      await new Promise((r) => setTimeout(r, 1500));
+
+      // ── 2. Start ─────────────────────────────────────────────────────
       await masterBot.startBroadcast();
 
       const results = await Promise.allSettled(
@@ -54,11 +51,12 @@ module.exports = {
         lines.push(`⚠️ ${failed.length} relay(s) en erreur — vérifiez les logs`);
       }
 
-      await interaction.editReply({ content: lines.join("\n") });
+      await edit(lines.join("\n"));
       logger.info("Restart terminé", { success: success.length, failed: failed.length });
+
     } catch (err) {
-      logger.error("Erreur start durant restart", { error: err.message });
-      await interaction.editReply(`❌ Arrêt OK mais échec au redémarrage : ${err.message}`);
+      logger.error("Erreur restart", { error: err.message });
+      await edit(`❌ Erreur durant le redémarrage : ${err.message}`);
     }
   },
 };
