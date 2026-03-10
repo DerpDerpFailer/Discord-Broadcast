@@ -41,7 +41,7 @@ module.exports = {
         new ActionRowBuilder().addComponents(
           new TextInputBuilder()
             .setCustomId("value")
-            .setLabel("Volume (0 = silence · 100 = normal · 200 = max)")
+            .setLabel("Volume % (0=silence · 100=normal · 200=max)")
             .setStyle(TextInputStyle.Short)
             .setValue(String(current))
             .setMinLength(1)
@@ -91,17 +91,19 @@ function buildVolumePanel(masterBot) {
     .setDescription(lines.join("\n"))
     .setFooter({ text: "Cliquez sur un bouton pour modifier le volume" });
 
-  // Boutons numérotés 1-N, max 5 par ligne
+  // Boutons numérotés 1-N, max 5 par ligne — style identique à /mute
   const rows = [];
   for (let i = 0; i < relayBots.length; i += 5) {
     rows.push(
       new ActionRowBuilder().addComponents(
-        relayBots.slice(i, i + 5).map((bot) =>
-          new ButtonBuilder()
+        relayBots.slice(i, i + 5).map((bot) => {
+          const vol   = dispatcher.getRelayVolume(bot.relayId);
+          const muted = dispatcher.isRelayMuted(bot.relayId);
+          return new ButtonBuilder()
             .setCustomId(`volume:edit:${bot.relayId}`)
-            .setLabel(String(bot.index))
-            .setStyle(ButtonStyle.Secondary)
-        )
+            .setLabel(muted ? `🔇 ${bot.index}` : `🔊 ${bot.index}`)
+            .setStyle(muted ? ButtonStyle.Danger : ButtonStyle.Success);
+        })
       )
     );
   }
