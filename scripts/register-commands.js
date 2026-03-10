@@ -42,19 +42,13 @@ const commands = [
     .setDescription("Configure le système de broadcast vocal"),
   new SlashCommandBuilder()
     .setName("mute")
-    .setDescription("Mute ou démute un speaker du broadcast")
-    .addUserOption((opt) =>
-      opt.setName("utilisateur").setDescription("Le speaker à muter/démuter (vide = état actuel)").setRequired(false)
-    ),
+    .setDescription("Mute ou démute un relay bot (panel interactif)"),
   new SlashCommandBuilder()
     .setName("volume")
-    .setDescription("Ajuste le volume d'un speaker (0-200%)")
-    .addUserOption((opt) =>
-      opt.setName("utilisateur").setDescription("Le speaker à ajuster (vide = voir tous les volumes)").setRequired(false)
-    )
-    .addIntegerOption((opt) =>
-      opt.setName("valeur").setDescription("Volume en % (0-200)").setMinValue(0).setMaxValue(200).setRequired(false)
-    ),
+    .setDescription("Ajuste le volume d'un relay bot (panel interactif)"),
+  new SlashCommandBuilder()
+    .setName("restart")
+    .setDescription("Redémarre le broadcast (stop + start enchaînés)"),
 ].map((c) => c.toJSON());
 
 (async () => {
