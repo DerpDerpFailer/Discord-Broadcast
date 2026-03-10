@@ -72,7 +72,7 @@ function buildMutePanel(masterBot) {
           const muted = dispatcher.isRelayMuted(bot.relayId);
           return new ButtonBuilder()
             .setCustomId(`mute:toggle:${bot.relayId}`)
-            .setLabel(muted ? `🔇 ${bot.name}` : `🔊 ${bot.name}`)
+            .setLabel(muted ? `🔇 ${bot.index}` : `🔊 ${bot.index}`)
             .setStyle(muted ? ButtonStyle.Danger : ButtonStyle.Success);
         })
       )
