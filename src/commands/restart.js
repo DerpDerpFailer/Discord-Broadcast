@@ -10,24 +10,20 @@ module.exports = {
     .setDescription("Redémarre le broadcast (stop + start enchaînés)"),
 
   async execute(interaction, masterBot) {
-    // Répondre immédiatement — Discord exige une réponse dans les 3s
-    await interaction.reply({ content: "🔄 **Redémarrage…** Arrêt en cours...", fetchReply: true });
-
-    const edit = (content) =>
-      interaction.editReply({ content }).catch((err) =>
-        logger.warn("editReply échoué", { error: err.message })
-      );
+    // deferReply EN PREMIER, hors de tout try/catch
+    // → Discord reçoit immédiatement un "chargement..." et ne timeout jamais
+    await interaction.deferReply();
 
     try {
       // ── 1. Stop ──────────────────────────────────────────────────────
       if (masterBot.isBroadcasting) {
+        await interaction.editReply("🔄 **Redémarrage…** Arrêt en cours...");
         await Promise.allSettled(masterBot._relayBots.map((b) => b.stopBroadcast()));
         await masterBot.stopBroadcast();
       }
 
-      await edit("🔄 **Redémarrage…** Connexion en cours...");
-
       // Pause pour laisser Discord libérer les slots voice
+      await interaction.editReply("🔄 **Redémarrage…** Connexion en cours...");
       await new Promise((r) => setTimeout(r, 1500));
 
       // ── 2. Start ─────────────────────────────────────────────────────
@@ -51,12 +47,12 @@ module.exports = {
         lines.push(`⚠️ ${failed.length} relay(s) en erreur — vérifiez les logs`);
       }
 
-      await edit(lines.join("\n"));
+      await interaction.editReply(lines.join("\n"));
       logger.info("Restart terminé", { success: success.length, failed: failed.length });
 
     } catch (err) {
       logger.error("Erreur restart", { error: err.message });
-      await edit(`❌ Erreur durant le redémarrage : ${err.message}`);
+      await interaction.editReply(`❌ Erreur durant le redémarrage : ${err.message}`).catch(() => {});
     }
   },
 };
