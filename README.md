@@ -32,7 +32,9 @@ src/
 │   ├── start.js          ← /start
 │   ├── stop.js           ← /stop
 │   ├── status.js         ← /status
-│   └── setup.js          ← /setup (wizard de configuration interactif)
+│   ├── setup.js          ← /setup (wizard de configuration interactif)
+│   ├── mute.js           ← /mute (panel boutons pour muter/démuter un relay)
+│   └── volume.js         ← /volume (panel boutons + modale pour ajuster le volume d'un relay)
 └── utils/
     └── logger.js         ← Winston structuré
 ```
@@ -138,6 +140,7 @@ Résultat attendu :
 |---|---|---|---|
 | Voix broadcastée | ✅ | ❌ | ❌ |
 | /start /stop /status | ✅ | ✅ | ❌ |
+| /mute /volume | ✅ | ✅ | ❌ |
 | /setup | ❌ | ❌ | ✅ |
 
 > Si le rôle Shotcaller n'existe pas encore sur le serveur, le fallback est **Administrateur** pour permettre le bootstrap initial via `/setup`.
@@ -150,6 +153,35 @@ Résultat attendu :
 | `/stop` | Tous les bots quittent leurs canaux |
 | `/status` | Affiche l'état, les speakers actifs, les stats par relay |
 | `/setup` | Lance le wizard de configuration interactif |
+| `/mute` | Panel interactif pour muter/démuter un relay bot |
+| `/volume` | Panel interactif pour ajuster le volume d'un relay bot |
+
+### /mute — Mute par relay bot
+
+Permet de couper le broadcast vers une team spécifique sans arrêter les autres.
+
+```
+/mute
+→ Affiche le panel avec l'état de chaque relay (🔊 actif / 🔇 muté)
+→ Boutons cliquables 1 2 3 … N pour toggler mute/unmute instantanément
+```
+
+- Le relay muté reçoit du silence (connexion voice maintenue, la team n'entend rien)
+- L'état se réinitialise au prochain `/stop`
+
+### /volume — Volume par relay bot
+
+Permet d'ajuster le niveau audio envoyé à une team spécifique.
+
+```
+/volume
+→ Affiche le panel avec le volume actuel de chaque relay [████░░░░░░]
+→ Boutons cliquables 1 2 3 … N pour ouvrir la modale de saisie
+→ Saisir un volume entre 0 et 200 (100 = normal, 200 = boost x2)
+```
+
+- 0 % = silence total, 100 % = volume normal, 200 % = boost x2
+- L'état se réinitialise au prochain `/stop`
 
 ---
 
@@ -279,6 +311,17 @@ git checkout vX.Y.Z
 sudo docker tag discord-broadcast:vX.Y.Z discord-broadcast:latest
 sudo docker restart discord-broadcast
 ```
+
+### Versions taguées
+
+| Tag | Contenu |
+|---|---|
+| `v1.0.0` | Broadcast stable, sans /setup |
+| `v1.1.0` | Wizard /setup + reconnexion auto |
+| `v1.2.0` | Rôle Staff + /status enrichi + alertes Discord |
+| `v1.3.0` | Watchdog pipeline + auto-disconnect + /setup avancé |
+| `v1.4.0` | /mute et /volume par speaker (ancienne implémentation) |
+| `v1.5.0` | /mute et /volume interactifs par relay bot (boutons + modale) |
 
 ---
 
