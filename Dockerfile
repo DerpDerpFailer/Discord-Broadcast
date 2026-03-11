@@ -53,8 +53,8 @@ RUN chmod +x docker-entrypoint.sh
 
 USER discord
 
-# Basic liveness check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-    CMD node -e "require('./src/config.js'); process.exit(0)" || exit 1
+# Health check : vérifie que les bots sont réellement connectés à Discord
+HEALTHCHECK --interval=30s --timeout=10s --start-period=90s --retries=3 \
+    CMD node scripts/healthcheck.js || exit 1
 
 CMD ["./docker-entrypoint.sh"]

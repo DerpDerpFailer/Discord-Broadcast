@@ -13,6 +13,7 @@
  *   7. Prêt — attendre /start dans Discord
  */
 
+const fs              = require("fs");
 const config          = require("./config");
 const logger          = require("./utils/logger").child("Main");
 const AudioDispatcher = require("./dispatcher");
@@ -78,6 +79,24 @@ async function main() {
   });
 
   logger.info("Utilisez /start dans Discord pour démarrer le broadcast.");
+
+  // ── Health check ──────────────────────────────────────────────────────────
+  function writeHealth() {
+    try {
+      const payload = {
+        timestamp:    Date.now(),
+        masterReady:  masterBot.client?.isReady() ?? false,
+        relaysReady:  relayBots.filter((b) => b.client?.isReady()).length,
+        relaysTotal:  relayBots.length,
+        broadcasting: masterBot.isBroadcasting,
+      };
+      fs.writeFileSync("/tmp/health.json", JSON.stringify(payload));
+    } catch {}
+  }
+
+  writeHealth();
+  const healthInterval = setInterval(writeHealth, 30_000);
+  healthInterval.unref();
 
   // ── Arrêt propre ──────────────────────────────────────────────────────────
 

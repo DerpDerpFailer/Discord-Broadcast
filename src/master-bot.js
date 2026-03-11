@@ -49,6 +49,7 @@ class MasterBot {
     this._watchdogInterval    = null;
     this._autoDisconnectTimer = null;
     this._lastSpeakerAt       = null;
+    this._masterAlertSent     = false;
 
     this.commands = new Collection();
     this.commands.set("start",  startCmd);
@@ -114,6 +115,7 @@ class MasterBot {
     this._broadcasting      = true;
     this._receiverStarted   = false;
     this._reconnectAttempts = 0;
+    this._masterAlertSent   = false;
 
     this._setupConnection(channel);
   }
@@ -175,6 +177,15 @@ class MasterBot {
 
       if (!this._broadcasting) return;
 
+      // Alerte après 3 tentatives échouées
+      if (this._reconnectAttempts === 3 && !this._masterAlertSent) {
+        this._masterAlertSent = true;
+        this.sendAlert(
+          `⚠️ **Master Bot** ne parvient pas à se reconnecter au canal source <#${config.sourceChannelId}> ` +
+          `(${this._reconnectAttempts} tentatives). Le broadcast est interrompu. Vérifiez les logs.`
+        );
+      }
+
       try {
         if (
           this.connection &&
@@ -182,6 +193,10 @@ class MasterBot {
         ) {
           await entersState(this.connection, VoiceConnectionStatus.Ready, 10_000);
           logger.info(`Reconnexion source rapide réussie`);
+          if (this._masterAlertSent) {
+            this._masterAlertSent = false;
+            this.sendAlert(`✅ **Master Bot** est de retour sur <#${config.sourceChannelId}> — broadcast rétabli.`);
+          }
           return;
         }
       } catch {
