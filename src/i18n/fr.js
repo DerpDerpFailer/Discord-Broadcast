@@ -41,6 +41,7 @@ module.exports = {
     relayOffline:    "🔴 {{count}} hors ligne",
     relayReconNote:  "_(reconnexion… tentative {{count}})_",
     relayAlertNote:  "⚠️ _{{count}} tentatives échouées_",
+    btnRefresh:      "Actualiser",
   },
 
   // ── /mute ───────────────────────────────────────────────────────────────

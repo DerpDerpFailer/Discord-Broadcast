@@ -412,6 +412,16 @@ class MasterBot {
   // ── Commandes ─────────────────────────────────────────────────────────────
 
   async _handleInteraction(interaction) {
+    // ── Bouton /status refresh ─────────────────────────────────────────
+    if (interaction.isMessageComponent() && interaction.customId === "status:refresh") {
+      try {
+        await statusCmd.handleComponent(interaction, this);
+      } catch (err) {
+        logger.error("Erreur status refresh", { error: err.message });
+      }
+      return;
+    }
+
     // ── Boutons /mute ──────────────────────────────────────────────────
     if (interaction.isMessageComponent() && interaction.customId.startsWith("mute:")) {
       try {

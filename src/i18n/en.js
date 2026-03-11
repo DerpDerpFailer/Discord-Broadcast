@@ -41,6 +41,7 @@ module.exports = {
     relayOffline:    "🔴 {{count}} offline",
     relayReconNote:  "_(reconnecting… attempt {{count}})_",
     relayAlertNote:  "⚠️ _{{count}} failed attempts_",
+    btnRefresh:      "Refresh",
   },
 
   // ── /mute ───────────────────────────────────────────────────────────────
