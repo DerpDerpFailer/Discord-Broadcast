@@ -16,7 +16,7 @@ const fr = require("./fr");
 const en = require("./en");
 
 const SUPPORTED = { fr, en };
-const DEFAULT   = "fr";
+const DEFAULT   = "en";
 
 // Locales Discord → code i18n
 const LOCALE_MAP = {

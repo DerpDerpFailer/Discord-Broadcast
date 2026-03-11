@@ -36,7 +36,7 @@ src/
 │   ├── mute.js           ← /mute (panel boutons pour muter/démuter un relay)
 │   └── volume.js         ← /volume (panel boutons + modale pour ajuster le volume d'un relay)
 ├── i18n/
-│   ├── index.js          ← Fonction t(key, vars), détection locale, fallback FR
+│   ├── index.js          ← Fonction t(key, vars), détection locale, fallback EN
 │   ├── fr.js             ← Strings françaises (langue par défaut)
 │   └── en.js             ← Strings anglaises (en-US, en-GB)
 └── utils/
@@ -398,9 +398,9 @@ Le bot détecte automatiquement la langue Discord de l'utilisateur et répond da
 
 | Locale Discord | Langue utilisée |
 |---|---|
-| `fr` | Français (langue par défaut) |
+| `fr` | Français |
 | `en-US`, `en-GB` | Anglais |
-| Toute autre locale | Français (fallback) |
+| Toute autre locale | Anglais (fallback par défaut) |
 
 Les descriptions des commandes slash dans le menu `/` sont également localisées — un utilisateur avec Discord en anglais verra les descriptions en anglais directement dans l'interface.
 
