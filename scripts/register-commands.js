@@ -27,25 +27,34 @@ if (!token || !guildId) {
   process.exit(1);
 }
 
+const EN = { "en-US": true, "en-GB": true };
+const loc = (en) => ({ "en-US": en, "en-GB": en });
+
 const commands = [
   new SlashCommandBuilder()
     .setName("start")
-    .setDescription("Démarre le broadcast vocal vers tous les canaux cibles"),
+    .setDescription("Démarre le broadcast vocal vers tous les canaux cibles")
+    .setDescriptionLocalizations(loc("Start the voice broadcast to all target channels")),
   new SlashCommandBuilder()
     .setName("stop")
-    .setDescription("Arrête le broadcast vocal"),
+    .setDescription("Arrête le broadcast vocal")
+    .setDescriptionLocalizations(loc("Stop the voice broadcast")),
   new SlashCommandBuilder()
     .setName("status")
-    .setDescription("Affiche le statut du système de broadcast"),
+    .setDescription("Affiche le statut du système de broadcast")
+    .setDescriptionLocalizations(loc("Show the broadcast system status")),
   new SlashCommandBuilder()
     .setName("setup")
-    .setDescription("Configure le système de broadcast vocal"),
+    .setDescription("Configure le système de broadcast vocal")
+    .setDescriptionLocalizations(loc("Configure the broadcast system")),
   new SlashCommandBuilder()
     .setName("mute")
-    .setDescription("Mute ou démute un relay bot (panel interactif)"),
+    .setDescription("Mute ou démute un relay bot (panel interactif)")
+    .setDescriptionLocalizations(loc("Mute or unmute a relay bot (interactive panel)")),
   new SlashCommandBuilder()
     .setName("volume")
-    .setDescription("Ajuste le volume d'un relay bot (panel interactif)"),
+    .setDescription("Ajuste le volume d'un relay bot (panel interactif)")
+    .setDescriptionLocalizations(loc("Adjust the volume of a relay bot (interactive panel)")),
 ].map((c) => c.toJSON());
 
 (async () => {

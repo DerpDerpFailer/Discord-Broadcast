@@ -3,32 +3,27 @@
 const { SlashCommandBuilder } = require("discord.js");
 const config = require("../config");
 const logger = require("../utils/logger").child("cmd:start");
+const i18n   = require("../i18n");
 
 module.exports = {
   data: new SlashCommandBuilder()
     .setName("start")
-    .setDescription("Démarre le broadcast vocal vers tous les canaux cibles"),
+    .setDescription("Démarre le broadcast vocal vers tous les canaux cibles")
+    .setDescriptionLocalizations({ "en-US": "Start the voice broadcast to all target channels", "en-GB": "Start the voice broadcast to all target channels" }),
 
-  /**
-   * @param {import('discord.js').ChatInputCommandInteraction} interaction
-   * @param {import('../master-bot')} masterBot
-   */
   async execute(interaction, masterBot) {
+    const { t } = i18n(interaction.locale);
+
     if (masterBot.isBroadcasting) {
-      return interaction.reply({
-        content: "⚠️ Broadcast déjà en cours. Utilisez `/stop` d'abord.",
-        ephemeral: true,
-      });
+      return interaction.reply({ content: t("start.alreadyRunning"), ephemeral: true });
     }
 
     await interaction.deferReply();
     logger.info("Commande start reçue", { user: interaction.user.tag });
 
     try {
-      // 1. Démarrer le master (rejoint la source + lance le dispatcher)
       await masterBot.startBroadcast();
 
-      // 2. Démarrer tous les relay bots en parallèle
       const results = await Promise.allSettled(
         masterBot._relayBots.map((bot) => bot.startBroadcast())
       );
@@ -36,23 +31,19 @@ module.exports = {
       const failed  = results.filter((r) => r.status === "rejected");
       const success = results.filter((r) => r.status === "fulfilled");
 
-      const lines = [
-        "✅ **Broadcast démarré !**",
-        "",
-        `🎧 Source : <#${config.sourceChannelId}>`,
-        `📢 Relays connectés : **${success.length}/${masterBot._relayBots.length}**`,
-      ];
+      let content = t("start.success", {
+        source: `<#${config.sourceChannelId}>`,
+        count:  success.length,
+        total:  masterBot._relayBots.length,
+      });
 
-      if (failed.length > 0) {
-        lines.push(`⚠️ ${failed.length} relay(s) en erreur — vérifiez les logs`);
-      }
+      if (failed.length > 0) content += t("start.successWarning", { failed: failed.length });
+      content += "\n\n" + t("start.hint");
 
-      lines.push("", "_Parlez dans le canal source pour être entendu partout._");
-
-      await interaction.editReply({ content: lines.join("\n") });
+      await interaction.editReply({ content });
     } catch (err) {
       logger.error("Erreur start", { error: err.message });
-      await interaction.editReply({ content: `❌ Échec du démarrage : ${err.message}` });
+      await interaction.editReply({ content: t("start.error", { error: err.message }) });
     }
   },
 };

@@ -2,32 +2,25 @@
 
 const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require("discord.js");
 const logger = require("../utils/logger").child("cmd:mute");
+const i18n   = require("../i18n");
 
 module.exports = {
   data: new SlashCommandBuilder()
     .setName("mute")
-    .setDescription("Mute ou démute un relay bot (clique sur un bouton pour toggler)"),
-
-  // ── Commande slash ────────────────────────────────────────────────────────
+    .setDescription("Mute ou démute un relay bot (clique sur un bouton pour toggler)")
+    .setDescriptionLocalizations({ "en-US": "Mute or unmute a relay bot (click a button to toggle)", "en-GB": "Mute or unmute a relay bot (click a button to toggle)" }),
 
   async execute(interaction, masterBot) {
     await interaction.deferReply({ flags: 64 });
-    await interaction.editReply(buildMutePanel(masterBot));
+    await interaction.editReply(buildMutePanel(masterBot, interaction.locale));
   },
 
-  // ── Boutons ───────────────────────────────────────────────────────────────
-
   async handleComponent(interaction, masterBot) {
-    // customId : "mute:toggle:relayId"
-    const parts   = interaction.customId.split(":");
-    const relayId = parts[2];
-
+    const relayId    = interaction.customId.split(":")[2];
     const dispatcher = masterBot.dispatcher;
     const bot        = masterBot._relayBots.find((b) => b.relayId === relayId);
 
-    if (!bot) {
-      return interaction.update(buildMutePanel(masterBot));
-    }
+    if (!bot) return interaction.update(buildMutePanel(masterBot, interaction.locale));
 
     if (dispatcher.isRelayMuted(relayId)) {
       dispatcher.unmuteRelay(relayId);
@@ -37,13 +30,12 @@ module.exports = {
       logger.info("Relay muté", { relay: bot.name, by: interaction.user.tag });
     }
 
-    return interaction.update(buildMutePanel(masterBot));
+    return interaction.update(buildMutePanel(masterBot, interaction.locale));
   },
 };
 
-// ── Helpers ───────────────────────────────────────────────────────────────
-
-function buildMutePanel(masterBot) {
+function buildMutePanel(masterBot, locale) {
+  const { t }      = i18n(locale);
   const dispatcher = masterBot.dispatcher;
   const relayBots  = masterBot._relayBots;
 
@@ -51,24 +43,22 @@ function buildMutePanel(masterBot) {
     const muted     = dispatcher.isRelayMuted(bot.relayId);
     const connected = bot.getStatus().connected;
     const icon      = muted ? "🔇" : "🔊";
-    const state     = muted ? " _(muté)_" : "";
+    const state     = muted ? t("mute.stateMuted") : "";
     const warn      = !connected ? " ⚠️" : "";
     return `${icon} **${bot.name}** — <#${bot.channelId}>${state}${warn}`;
   });
 
   const embed = new EmbedBuilder()
-    .setTitle("🔊 État des relay bots")
+    .setTitle(t("mute.panelTitle"))
     .setColor(0x5865f2)
     .setDescription(lines.join("\n"))
-    .setFooter({ text: "Cliquez sur un bouton pour muter/démuter" });
+    .setFooter({ text: t("mute.panelFooter") });
 
-  // Max 5 boutons par ActionRow → on découpe par tranches de 5
   const rows = [];
   for (let i = 0; i < relayBots.length; i += 5) {
-    const slice = relayBots.slice(i, i + 5);
     rows.push(
       new ActionRowBuilder().addComponents(
-        slice.map((bot) => {
+        relayBots.slice(i, i + 5).map((bot) => {
           const muted = dispatcher.isRelayMuted(bot.relayId);
           return new ButtonBuilder()
             .setCustomId(`mute:toggle:${bot.relayId}`)

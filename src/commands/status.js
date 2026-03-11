@@ -2,14 +2,17 @@
 
 const { SlashCommandBuilder, EmbedBuilder } = require("discord.js");
 const logger = require("../utils/logger").child("cmd:status");
+const i18n   = require("../i18n");
 
 module.exports = {
   data: new SlashCommandBuilder()
     .setName("status")
-    .setDescription("Affiche le statut du système de broadcast"),
+    .setDescription("Affiche le statut du système de broadcast")
+    .setDescriptionLocalizations({ "en-US": "Show the broadcast system status", "en-GB": "Show the broadcast system status" }),
 
   async execute(interaction, masterBot) {
     await interaction.deferReply({ ephemeral: true });
+    const { t } = i18n(interaction.locale);
 
     const master     = masterBot.getStatus();
     const dispatcher = masterBot.dispatcher.getStats();
@@ -20,88 +23,60 @@ module.exports = {
       ? ((dispatcher.totalFramesDropped / dispatcher.totalFramesDispatched) * 100).toFixed(2)
       : "0.00";
 
-    // ── Embed principal ───────────────────────────────────────────────
-
     const embed = new EmbedBuilder()
-      .setTitle(`${isLive ? "🟢" : "🔴"} Discord Broadcast — Status`)
+      .setTitle(t("status.title", { icon: isLive ? "🟢" : "🔴" }))
       .setColor(isLive ? 0x57f287 : 0xed4245)
       .setTimestamp()
       .addFields(
+        { name: t("status.fieldStatus"),     value: isLive ? t("status.live") : t("status.stopped"), inline: true },
+        { name: t("status.fieldUptime"),     value: isLive ? `${uptime}s` : "—", inline: true },
+        { name: t("status.fieldSource"),     value: master.connectionStatus ?? "—", inline: true },
         {
-          name:   "📡 Statut",
-          value:  isLive ? "En cours" : "Arrêté",
-          inline: true,
-        },
-        {
-          name:   "⏱️ Uptime",
-          value:  isLive ? `${uptime}s` : "—",
-          inline: true,
-        },
-        {
-          name:   "🔗 Source",
-          value:  master.connectionStatus ?? "—",
-          inline: true,
-        },
-        {
-          name:   "📊 Frames",
+          name:   t("status.fieldFrames"),
           value:  [
-            `Envoyées : ${dispatcher.totalFramesDispatched.toLocaleString()}`,
-            `Perdues  : ${dispatcher.totalFramesDropped.toLocaleString()} (${dropRate}%)`,
+            t("status.framesSent", { count: dispatcher.totalFramesDispatched.toLocaleString() }),
+            t("status.framesLost", { count: dispatcher.totalFramesDropped.toLocaleString(), rate: dropRate }),
           ].join("\n"),
           inline: true,
         },
         {
-          name:   "🎤 Speakers actifs",
+          name:   t("status.fieldSpeakers"),
           value:  master.activeSpeakers.length > 0
             ? master.activeSpeakers.map((id) => `<@${id}>`).join(", ")
-            : "_Aucun_",
+            : t("status.noSpeakers"),
           inline: true,
         },
-        {
-          name:   "🔄 Reconnexions source",
-          value:  String(master.reconnectAttempts ?? 0),
-          inline: true,
-        }
+        { name: t("status.fieldReconnects"), value: String(master.reconnectAttempts ?? 0), inline: true }
       );
-
-    // ── Relay bots ────────────────────────────────────────────────────
 
     if (relayBots.length > 0) {
       const lines = relayBots.map((bot) => {
         const s = bot.getStatus();
-
-        // Icône état
         let icon;
-        if (s.connected && s.registered)       icon = "🟢"; // en ligne et actif
-        else if (s.broadcasting && !s.connected) icon = "🟡"; // reconnexion en cours
-        else                                     icon = "🔴"; // arrêté
+        if (s.connected && s.registered)         icon = "🟢";
+        else if (s.broadcasting && !s.connected) icon = "🟡";
+        else                                      icon = "🔴";
 
         const parts = [`${icon} **${s.name}** — <#${s.channelId}>`];
-
-        if (!s.connected && s.broadcasting) {
-          parts.push(`_(reconnexion… tentative ${s.reconnectAttempts})_`);
-        }
-        if (s.reconnectAttempts >= 3 && s.broadcasting) {
-          parts.push(`⚠️ _${s.reconnectAttempts} tentatives échouées_`);
-        }
-        if (s.queueDepth > 0) {
+        if (!s.connected && s.broadcasting)
+          parts.push(t("status.relayReconNote", { count: s.reconnectAttempts }));
+        if (s.reconnectAttempts >= 3 && s.broadcasting)
+          parts.push(t("status.relayAlertNote", { count: s.reconnectAttempts }));
+        if (s.queueDepth > 0)
           parts.push(`_buf: ${s.queueDepth}_`);
-        }
-
         return parts.join(" ");
       });
 
-      // Résumé
       const online  = relayBots.filter((b) => b.getStatus().connected).length;
       const recon   = relayBots.filter((b) => { const s = b.getStatus(); return s.broadcasting && !s.connected; }).length;
       const offline = relayBots.length - online - recon;
 
-      let summary = `🟢 ${online} en ligne`;
-      if (recon   > 0) summary += ` · 🟡 ${recon} reconnexion`;
-      if (offline > 0) summary += ` · 🔴 ${offline} hors ligne`;
+      const summaryParts = [t("status.relayOnline", { count: online })];
+      if (recon   > 0) summaryParts.push(t("status.relayRecon",   { count: recon }));
+      if (offline > 0) summaryParts.push(t("status.relayOffline", { count: offline }));
 
       embed.addFields({
-        name:  `📢 Relay Bots — ${summary}`,
+        name:  t("status.relaysTitle", { summary: summaryParts.join(" · ") }),
         value: lines.join("\n"),
       });
     }

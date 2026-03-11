@@ -1,0 +1,227 @@
+"use strict";
+
+module.exports = {
+
+  // ── /start ──────────────────────────────────────────────────────────────
+  start: {
+    description:    "Start the voice broadcast to all target channels",
+    alreadyRunning: "⚠️ Broadcast already running. Use `/stop` first.",
+    success:        "✅ **Broadcast started!**\n\n🎧 Source: {{source}}\n📢 Relays connected: **{{count}}/{{total}}**",
+    successWarning: "\n⚠️ {{failed}} relay(s) failed — check the logs",
+    hint:           "_Speak in the source channel to be heard everywhere._",
+    error:          "❌ Failed to start: {{error}}",
+  },
+
+  // ── /stop ───────────────────────────────────────────────────────────────
+  stop: {
+    description: "Stop the voice broadcast",
+    notRunning:  "⚠️ No broadcast is currently running.",
+    success:     "🛑 **Broadcast stopped.** All bots have left their channels.",
+    error:       "❌ Error while stopping: {{error}}",
+  },
+
+  // ── /status ─────────────────────────────────────────────────────────────
+  status: {
+    description:     "Show the broadcast system status",
+    title:           "{{icon}} Discord Broadcast — Status",
+    fieldStatus:     "📡 Status",
+    fieldUptime:     "⏱️ Uptime",
+    fieldSource:     "🔗 Source",
+    fieldFrames:     "📊 Frames",
+    fieldSpeakers:   "🎤 Active speakers",
+    fieldReconnects: "🔄 Source reconnections",
+    live:            "Live",
+    stopped:         "Stopped",
+    noSpeakers:      "_None_",
+    framesSent:      "Sent   : {{count}}",
+    framesLost:      "Dropped: {{count}} ({{rate}}%)",
+    relaysTitle:     "📢 Relay Bots — {{summary}}",
+    relayOnline:     "🟢 {{count}} online",
+    relayRecon:      "🟡 {{count}} reconnecting",
+    relayOffline:    "🔴 {{count}} offline",
+    relayReconNote:  "_(reconnecting… attempt {{count}})_",
+    relayAlertNote:  "⚠️ _{{count}} failed attempts_",
+  },
+
+  // ── /mute ───────────────────────────────────────────────────────────────
+  mute: {
+    description: "Mute or unmute a relay bot (click a button to toggle)",
+    panelTitle:  "🔊 Relay bots status",
+    panelFooter: "Click a button to mute/unmute",
+    stateMuted:  " _(muted)_",
+  },
+
+  // ── /volume ─────────────────────────────────────────────────────────────
+  volume: {
+    description:  "Adjust the volume of relay bots (0-200%)",
+    panelTitle:   "🎚️ Relay bots volume",
+    panelFooter:  "Click a button to change the volume",
+    modalTitle:   "Volume — {{name}}",
+    modalLabel:   "Volume % (0=mute · 100=normal · 200=max)",
+  },
+
+  // ── /setup ──────────────────────────────────────────────────────────────
+  setup: {
+    description:    "Configure the broadcast system",
+    notYourSession: "❌ This is not your session.",
+    sessionExpired: "❌ Session expired. Run `/setup` again.",
+    cancelled:      "Configuration cancelled.",
+    notAdmin:       "❌ Only server **Administrators** can use `/setup`.",
+
+    welcome: {
+      title:       "⚙️ Broadcast Configuration",
+      description: "This wizard will guide you through the setup.\n\n**Steps:**\n1️⃣  Source channel (Shotcallers)\n2️⃣  Shotcaller role — can speak + manage the bot\n3️⃣  Staff role — can manage the bot (optional)\n4️⃣  Alert channel (optional)\n5️⃣  Target channel for each relay bot",
+      btnStart:    "Start",
+      btnAdvanced: "Advanced settings",
+      btnCancel:   "Cancel",
+    },
+
+    step1: {
+      title:       "⚙️ Step 1/5 — Source channel",
+      description: "Type the name of the source channel (e.g. **Shotcallers**).",
+      found:       "Found **#{{name}}**, is that correct?",
+      notFound:    "❌ **{{name}}**\nCheck the spelling and try again.",
+      fieldName:   "Configured channel",
+      notSet:      "_Not set_",
+      btnSearch:   "Search for a channel",
+      btnResearch: "Search again",
+      btnConfirm:  "✅ Yes, that's it!",
+      btnRetry:    "❌ No, search again",
+      btnNext:     "Next →",
+      btnCancel:   "Cancel",
+      modalTitle:  "Source channel name",
+      modalPh:     "E.g.: Shotcallers",
+    },
+
+    step2: {
+      title:       "⚙️ Step 2/5 — Shotcaller role",
+      description: "Type the name of the **Shotcaller** role.\nThis role can speak (broadcast) and use `/start` `/stop` `/status`.",
+      found:       "Found role **@{{name}}**, is that correct?",
+      notFound:    "❌ **{{name}}**\nCheck the spelling and try again.",
+      fieldName:   "🎤 Configured Shotcaller role",
+      notSet:      "_Not set_",
+      btnSearch:   "Search for a role",
+      btnConfirm:  "✅ Yes, that's it!",
+      btnRetry:    "❌ No, search again",
+      btnPrev:     "Previous",
+      btnNext:     "Next →",
+      btnCancel:   "Cancel",
+      modalTitle:  "Shotcaller role name",
+      modalPh:     "E.g.: Shotcaller",
+    },
+
+    step3: {
+      title:       "⚙️ Step 3/5 — Staff role (optional)",
+      description: "Type the name of the **Staff** role _(optional)_.\nThis role can use `/start` `/stop` `/status` but will **not** be broadcast.",
+      found:       "Found role **@{{name}}**, is that correct?",
+      notFound:    "❌ **{{name}}**\nCheck the spelling and try again.",
+      fieldName:   "🛡️ Configured Staff role",
+      notSet:      "_None_",
+      btnSearch:   "Search for a role",
+      btnConfirm:  "✅ Yes, that's it!",
+      btnRetry:    "❌ No, search again",
+      btnPrev:     "Previous",
+      btnSkip:     "Skip →",
+      btnNext:     "Next →",
+      btnCancel:   "Cancel",
+      modalTitle:  "Staff role name",
+      modalPh:     "E.g.: Staff",
+    },
+
+    step4: {
+      title:       "⚙️ Step 4/5 — Alert channel (optional)",
+      description: "Type the name of the **text channel** where disconnection alerts will be sent _(optional)_.",
+      found:       "Found **#{{name}}**, is that correct?",
+      notFound:    "❌ **{{name}}**\nCheck the spelling and try again.",
+      fieldName:   "🔔 Configured channel",
+      notSet:      "_None_",
+      btnSearch:   "Search for a channel",
+      btnConfirm:  "✅ Yes, that's it!",
+      btnRetry:    "❌ No, search again",
+      btnPrev:     "Previous",
+      btnSkip:     "Skip →",
+      btnNext:     "Next →",
+      btnCancel:   "Cancel",
+      modalTitle:  "Alert channel name",
+      modalPh:     "E.g.: bot-logs",
+    },
+
+    step5: {
+      title:       "⚙️ Step 5/5 — Relay bot {{index}}/{{total}}",
+      description: "Type the target channel name for **{{name}}** (e.g. Team {{index}}).",
+      found:       "Found **#{{name}}**, is that correct?",
+      notFound:    "❌ **{{name}}**\nCheck the spelling and try again.",
+      fieldChan:   "📢 Configured channel",
+      fieldName:   "🏷️ Name",
+      notSet:      "_Not set_",
+      btnSearch:   "Search for a channel",
+      btnConfirm:  "✅ Yes, that's it!",
+      btnRetry:    "❌ No, search again",
+      btnPrev:     "Previous",
+      btnName:     "✏️ Edit name",
+      btnNext:     "Next →",
+      btnSummary:  "Summary →",
+      modalTitle:  "Channel for {{name}}",
+      modalPh:     "E.g.: Team {{index}}",
+      nameModal:   "Relay bot {{index}} name",
+      nameLabel:   "New name",
+    },
+
+    summary: {
+      title:        "⚙️ Summary",
+      descOk:       "Everything is configured. Click **Save** to apply.",
+      descWarning:  "⚠️ Some items are not yet configured.",
+      fieldSource:  "📥 Source channel",
+      fieldRole:    "🎤 Shotcaller role",
+      fieldStaff:   "🛡️ Staff role",
+      fieldAlert:   "🔔 Alert channel",
+      fieldRelays:  "📢 Relay bots",
+      notSet:       "❌ Not configured",
+      none:         "_None_",
+      btnPrev:      "Previous",
+      btnAdvanced:  "🔧 Advanced",
+      btnSave:      "💾 Save",
+    },
+
+    advanced: {
+      title:        "🔧 Advanced settings",
+      description:  "These settings affect audio behavior and system reliability.\nClick **Edit** to change values.",
+      silence:      "🔇 Silence before speaker stop",
+      silenceVal:   "`{{ms}} ms` — delay before considering a speaker has stopped",
+      buffer:       "📦 Max buffer per speaker",
+      bufferVal:    "`{{frames}} frames` — {{ms}} ms of buffer before dropping",
+      watchdog:     "🐕 Pipeline watchdog",
+      watchdogOff:  "🔴 Disabled",
+      watchdogOn:   "🟢 Restarts if blocked > `{{ms}} ms`",
+      autodiscon:   "💤 Auto-disconnect",
+      autodisconOff:"🔴 Disabled",
+      autodisconOn: "🟢 Stops broadcast after `{{time}}` of inactivity",
+      loglevel:     "📋 Log level",
+      btnBack:      "Back",
+      btnEdit:      "✏️ Edit",
+      btnSave:      "💾 Save",
+      modalTitle:   "Advanced settings",
+      labelSilence: "Silence before speaker stop (ms)",
+      labelBuffer:  "Max buffer frames per speaker",
+      labelWatchdog:"Pipeline watchdog (ms, 0 = disabled)",
+      labelAutoDisc:"Auto-disconnect inactivity (min, 0 = off)",
+      labelLog:     "Log level (error/warn/info/debug)",
+      saved:        "✅ Advanced settings saved!",
+      savedDesc:    "Changes are active immediately.",
+    },
+
+    saved:     "✅ Configuration saved!",
+    savedDesc: "Changes are active immediately.\nRun `/start` to apply the new channels.",
+
+    searchModal: {
+      label: "Search",
+    },
+  },
+
+  // ── master-bot ──────────────────────────────────────────────────────────
+  permissions: {
+    adminOnly:    "❌ Only server **Administrators** can use `/setup`.",
+    noRole:       "❌ You need the {{roles}} role to use this command.",
+    noRoleConfig: "❌ No authorized role configured.\nUse `/setup` to define one.",
+  },
+};

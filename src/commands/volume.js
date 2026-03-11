@@ -11,37 +11,35 @@ const {
   TextInputStyle,
 } = require("discord.js");
 const logger = require("../utils/logger").child("cmd:volume");
+const i18n   = require("../i18n");
 
 module.exports = {
   data: new SlashCommandBuilder()
     .setName("volume")
-    .setDescription("Ajuste le volume des relay bots (0-200%)"),
-
-  // ── Commande slash ────────────────────────────────────────────────────────
+    .setDescription("Ajuste le volume des relay bots (0-200%)")
+    .setDescriptionLocalizations({ "en-US": "Adjust the volume of relay bots (0-200%)", "en-GB": "Adjust the volume of relay bots (0-200%)" }),
 
   async execute(interaction, masterBot) {
     await interaction.deferReply({ flags: 64 });
-    await interaction.editReply(buildVolumePanel(masterBot));
+    await interaction.editReply(buildVolumePanel(masterBot, interaction.locale));
   },
 
-  // ── Bouton : ouvre la modale ──────────────────────────────────────────────
-
   async handleComponent(interaction, masterBot) {
-    // customId : "volume:edit:relayId"
+    const { t }   = i18n(interaction.locale);
     const relayId = interaction.customId.split(":")[2];
     const bot     = masterBot._relayBots.find((b) => b.relayId === relayId);
-    if (!bot) return interaction.update(buildVolumePanel(masterBot));
+    if (!bot) return interaction.update(buildVolumePanel(masterBot, interaction.locale));
 
     const current = masterBot.dispatcher.getRelayVolume(relayId);
 
     const modal = new ModalBuilder()
       .setCustomId(`volume_modal:set:${relayId}`)
-      .setTitle(`Volume — ${bot.name}`)
+      .setTitle(t("volume.modalTitle", { name: bot.name }))
       .addComponents(
         new ActionRowBuilder().addComponents(
           new TextInputBuilder()
             .setCustomId("value")
-            .setLabel("Volume % (0=silence · 100=normal · 200=max)")
+            .setLabel(t("volume.modalLabel"))
             .setStyle(TextInputStyle.Short)
             .setValue(String(current))
             .setMinLength(1)
@@ -53,10 +51,7 @@ module.exports = {
     return interaction.showModal(modal);
   },
 
-  // ── Modale : applique le volume ───────────────────────────────────────────
-
   async handleModal(interaction, masterBot) {
-    // customId : "volume_modal:set:relayId"
     const relayId = interaction.customId.split(":")[2];
     const bot     = masterBot._relayBots.find((b) => b.relayId === relayId);
     if (!bot) return interaction.deferUpdate();
@@ -68,13 +63,12 @@ module.exports = {
     logger.info("Volume relay ajusté", { relay: bot.name, value, by: interaction.user.tag });
 
     await interaction.deferUpdate();
-    return interaction.editReply(buildVolumePanel(masterBot));
+    return interaction.editReply(buildVolumePanel(masterBot, interaction.locale));
   },
 };
 
-// ── Helpers ───────────────────────────────────────────────────────────────
-
-function buildVolumePanel(masterBot) {
+function buildVolumePanel(masterBot, locale) {
+  const { t }      = i18n(locale);
   const dispatcher = masterBot.dispatcher;
   const relayBots  = masterBot._relayBots;
 
@@ -86,18 +80,16 @@ function buildVolumePanel(masterBot) {
   });
 
   const embed = new EmbedBuilder()
-    .setTitle("🎚️ Volumes des relay bots")
+    .setTitle(t("volume.panelTitle"))
     .setColor(0x5865f2)
     .setDescription(lines.join("\n"))
-    .setFooter({ text: "Cliquez sur un bouton pour modifier le volume" });
+    .setFooter({ text: t("volume.panelFooter") });
 
-  // Boutons numérotés 1-N, max 5 par ligne — style identique à /mute
   const rows = [];
   for (let i = 0; i < relayBots.length; i += 5) {
     rows.push(
       new ActionRowBuilder().addComponents(
         relayBots.slice(i, i + 5).map((bot) => {
-          const vol   = dispatcher.getRelayVolume(bot.relayId);
           const muted = dispatcher.isRelayMuted(bot.relayId);
           return new ButtonBuilder()
             .setCustomId(`volume:edit:${bot.relayId}`)

@@ -27,6 +27,7 @@ const statusCmd = require("./commands/status");
 const setupCmd  = require("./commands/setup");
 const muteCmd    = require("./commands/mute");
 const volumeCmd  = require("./commands/volume");
+const i18n       = require("./i18n");
 
 // Backoff exponentiel : 2s, 4s, 8s, 16s, 30s max
 const RECONNECT_DELAYS = [2000, 4000, 8000, 16000, 30000];
@@ -471,7 +472,7 @@ class MasterBot {
       const isAdmin = interaction.member?.permissions?.has("Administrator");
       if (!isAdmin) {
         await interaction.reply({
-          content:   "❌ Seuls les **Administrateurs** du serveur peuvent utiliser `/setup`.",
+          content:   i18n(interaction.locale).t("permissions.adminOnly"),
           ephemeral: true,
         });
         return;
@@ -511,10 +512,11 @@ class MasterBot {
         shotcallerRole?.name,
         staffRole?.name,
       ].filter(Boolean).map((n) => `**${n}**`).join(" ou ");
+      const { t } = i18n(interaction.locale);
       const hint = roleNames
-        ? `Vous devez avoir le rôle ${roleNames} pour utiliser cette commande.`
-        : `Aucun rôle autorisé configuré.\nUtilisez \`/setup\` pour en définir un.`;
-      await interaction.reply({ content: `❌ ${hint}`, ephemeral: true });
+        ? t("permissions.noRole", { roles: roleNames })
+        : t("permissions.noRoleConfig");
+      await interaction.reply({ content: hint, ephemeral: true });
       return;
     }
 

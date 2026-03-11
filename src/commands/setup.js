@@ -27,6 +27,7 @@ const {
 const configStore = require("../config-store");
 const config      = require("../config");
 const logger      = require("../utils/logger").child("cmd:setup");
+const i18n        = require("../i18n");
 
 const wizardStates = new Map();
 
@@ -35,7 +36,8 @@ const wizardStates = new Map();
 module.exports = {
   data: new SlashCommandBuilder()
     .setName("setup")
-    .setDescription("Configure le système de broadcast vocal"),
+    .setDescription("Configure le système de broadcast vocal")
+    .setDescriptionLocalizations({ "en-US": "Configure the broadcast system", "en-GB": "Configure the broadcast system" }),
 
   async execute(interaction, masterBot) {
     const userId = interaction.user.id;
@@ -43,6 +45,7 @@ module.exports = {
 
     wizardStates.set(userId, {
       step:              0,
+      locale:            interaction.locale,
       sourceChannelId:   saved.sourceChannelId    || config.sourceChannelId    || null,
       roleId:            saved.shotcallerRoleId   || config.shotcallerRoleId   || null,
       staffRoleId:       saved.staffRoleId        || config.staffRoleId        || null,
@@ -64,7 +67,7 @@ module.exports = {
     });
 
     await interaction.reply({
-      ...buildStep(wizardStates.get(userId), userId, masterBot._relayBots.length, interaction.guild),
+      ...buildStep(wizardStates.get(userId), userId, masterBot._relayBots.length, interaction.guild, wizardStates.get(userId).locale),
       ephemeral: true,
     });
 
@@ -79,63 +82,63 @@ module.exports = {
     const userId = parts[2];
 
     if (interaction.user.id !== userId) {
-      return interaction.reply({ content: "❌ Ce n'est pas votre session.", ephemeral: true });
+      return interaction.reply({ content: i18n(interaction.locale).t("setup.notYourSession"), ephemeral: true });
     }
 
     const state = wizardStates.get(userId);
     if (!state) {
-      return interaction.update({ content: "❌ Session expirée. Relancez `/setup`.", embeds: [], components: [] });
+      return interaction.update({ content: i18n(interaction.locale).t("setup.sessionExpired"), embeds: [], components: [] });
     }
 
     const relayCount = masterBot._relayBots.length;
 
     if (action === "cancel") {
       wizardStates.delete(userId);
-      return interaction.update({ content: "Configuration annulée.", embeds: [], components: [] });
+      return interaction.update({ content: i18n(interaction.locale).t("setup.cancelled"), embeds: [], components: [] });
     }
 
     if (action === "start") {
       state.step = 1;
-      return interaction.update(buildStep(state, userId, relayCount, interaction.guild));
+      return interaction.update(buildStep(state, userId, relayCount, interaction.guild, state.locale));
     }
 
     // ── Étape 1 : canal source ───────────────────────────────────────────
     if (action === "search_src") {
-      return interaction.showModal(buildSearchModal("Nom du canal source", "Ex: Shotcallers", `setup_modal:src_search:${userId}`));
+      return interaction.showModal(buildSearchModal(i18n(state.locale).t("setup.step1.modalTitle"), i18n(state.locale).t("setup.step1.modalPh"), `setup_modal:src_search:${userId}`, state.locale));
     }
     if (action === "confirm_src") {
       state.sourceChannelId    = state.pendingChannelId;
       state.pendingChannelId   = null;
       state.pendingChannelName = null;
       state.step = 2;
-      return interaction.update(buildStep(state, userId, relayCount, interaction.guild));
+      return interaction.update(buildStep(state, userId, relayCount, interaction.guild, state.locale));
     }
     if (action === "retry_src") {
       state.pendingChannelId   = null;
       state.pendingChannelName = null;
-      return interaction.update(buildStep(state, userId, relayCount, interaction.guild));
+      return interaction.update(buildStep(state, userId, relayCount, interaction.guild, state.locale));
     }
 
     // ── Étape 2 : rôle Shotcaller ────────────────────────────────────────
     if (action === "search_role") {
-      return interaction.showModal(buildSearchModal("Nom du rôle Shotcaller", "Ex: Shotcaller", `setup_modal:role_search:${userId}`));
+      return interaction.showModal(buildSearchModal(i18n(state.locale).t("setup.step2.modalTitle"), i18n(state.locale).t("setup.step2.modalPh"), `setup_modal:role_search:${userId}`, state.locale));
     }
     if (action === "confirm_role") {
       state.roleId           = state.pendingRoleId;
       state.pendingRoleId    = null;
       state.pendingRoleName  = null;
       state.step = 3;
-      return interaction.update(buildStep(state, userId, relayCount, interaction.guild));
+      return interaction.update(buildStep(state, userId, relayCount, interaction.guild, state.locale));
     }
     if (action === "retry_role") {
       state.pendingRoleId   = null;
       state.pendingRoleName = null;
-      return interaction.update(buildStep(state, userId, relayCount, interaction.guild));
+      return interaction.update(buildStep(state, userId, relayCount, interaction.guild, state.locale));
     }
 
     // ── Étape 3 : rôle Staff ─────────────────────────────────────────────
     if (action === "search_staff") {
-      return interaction.showModal(buildSearchModal("Nom du rôle Staff", "Ex: Staff", `setup_modal:staff_search:${userId}`));
+      return interaction.showModal(buildSearchModal(i18n(state.locale).t("setup.step3.modalTitle"), i18n(state.locale).t("setup.step3.modalPh"), `setup_modal:staff_search:${userId}`, state.locale));
     }
     if (action === "confirm_staff") {
       state.staffRoleId      = state.pendingRoleId;
@@ -143,23 +146,23 @@ module.exports = {
       state.pendingRoleName  = null;
       state.step = 4;
       state.currentRelayIndex = 0;
-      return interaction.update(buildStep(state, userId, relayCount, interaction.guild));
+      return interaction.update(buildStep(state, userId, relayCount, interaction.guild, state.locale));
     }
     if (action === "retry_staff") {
       state.pendingRoleId   = null;
       state.pendingRoleName = null;
-      return interaction.update(buildStep(state, userId, relayCount, interaction.guild));
+      return interaction.update(buildStep(state, userId, relayCount, interaction.guild, state.locale));
     }
     if (action === "skip_staff") {
       state.staffRoleId = null;
       state.step = 4;
       state.currentRelayIndex = 0;
-      return interaction.update(buildStep(state, userId, relayCount, interaction.guild));
+      return interaction.update(buildStep(state, userId, relayCount, interaction.guild, state.locale));
     }
 
     // ── Étape 4 : salon d'alertes ────────────────────────────────────────────
     if (action === "search_alert") {
-      return interaction.showModal(buildSearchModal("Nom du salon d'alertes", "Ex: logs-bots", `setup_modal:alert_search:${userId}`));
+      return interaction.showModal(buildSearchModal(i18n(state.locale).t("setup.step4.modalTitle"), i18n(state.locale).t("setup.step4.modalPh"), `setup_modal:alert_search:${userId}`, state.locale));
     }
     if (action === "confirm_alert") {
       state.alertChannelId     = state.pendingChannelId;
@@ -167,50 +170,51 @@ module.exports = {
       state.pendingChannelName = null;
       state.step = 5;
       state.currentRelayIndex = 0;
-      return interaction.update(buildStep(state, userId, relayCount, interaction.guild));
+      return interaction.update(buildStep(state, userId, relayCount, interaction.guild, state.locale));
     }
     if (action === "retry_alert") {
       state.pendingChannelId   = null;
       state.pendingChannelName = null;
-      return interaction.update(buildStep(state, userId, relayCount, interaction.guild));
+      return interaction.update(buildStep(state, userId, relayCount, interaction.guild, state.locale));
     }
     if (action === "skip_alert") {
       state.alertChannelId = null;
       state.step = 5;
       state.currentRelayIndex = 0;
-      return interaction.update(buildStep(state, userId, relayCount, interaction.guild));
+      return interaction.update(buildStep(state, userId, relayCount, interaction.guild, state.locale));
     }
 
     // ── Étape 5 : relay bots ─────────────────────────────────────────────
     if (action === "search_relay") {
       const idx = state.currentRelayIndex;
       return interaction.showModal(buildSearchModal(
-        `Canal pour ${state.relayBots[idx].name}`,
-        "Ex: Team 1",
-        `setup_modal:relay_search:${userId}`
+        i18n(state.locale).t("setup.step5.modalTitle", { name: state.relayBots[idx].name }),
+        i18n(state.locale).t("setup.step5.modalPh", { index: idx + 1 }),
+        `setup_modal:relay_search:${userId}`,
+        state.locale
       ));
     }
     if (action === "confirm_relay") {
       state.relayBots[state.currentRelayIndex].channelId = state.pendingChannelId;
       state.pendingChannelId   = null;
       state.pendingChannelName = null;
-      return interaction.update(buildStep(state, userId, relayCount, interaction.guild));
+      return interaction.update(buildStep(state, userId, relayCount, interaction.guild, state.locale));
     }
     if (action === "retry_relay") {
       state.pendingChannelId   = null;
       state.pendingChannelName = null;
-      return interaction.update(buildStep(state, userId, relayCount, interaction.guild));
+      return interaction.update(buildStep(state, userId, relayCount, interaction.guild, state.locale));
     }
     if (action === "relay_name") {
       const current = state.relayBots[state.currentRelayIndex];
       const modal = new ModalBuilder()
         .setCustomId(`setup_modal:name:${userId}`)
-        .setTitle(`Nom du relay bot ${state.currentRelayIndex + 1}`)
+        .setTitle(i18n(interaction.locale).t("setup.step5.nameModal", { index: state.currentRelayIndex + 1 }))
         .addComponents(
           new ActionRowBuilder().addComponents(
             new TextInputBuilder()
               .setCustomId("name")
-              .setLabel("Nouveau nom")
+              .setLabel(i18n(interaction.locale).t("setup.step5.nameLabel"))
               .setStyle(TextInputStyle.Short)
               .setValue(current.name)
               .setMaxLength(32)
@@ -236,7 +240,7 @@ module.exports = {
       } else {
         state.step = Math.max(0, state.step - 1);
       }
-      return interaction.update(buildStep(state, userId, relayCount, interaction.guild));
+      return interaction.update(buildStep(state, userId, relayCount, interaction.guild, state.locale));
     }
 
     if (action === "next") {
@@ -251,19 +255,19 @@ module.exports = {
       } else {
         state.step++;
       }
-      return interaction.update(buildStep(state, userId, relayCount, interaction.guild));
+      return interaction.update(buildStep(state, userId, relayCount, interaction.guild, state.locale));
     }
 
     // ── Paramètres avancés ───────────────────────────────────────────────
     if (action === "advanced") {
       state._advancedFrom = state.step; // pour revenir
       state.step = 7;
-      return interaction.update(buildStep(state, userId, relayCount, interaction.guild));
+      return interaction.update(buildStep(state, userId, relayCount, interaction.guild, state.locale));
     }
 
     if (action === "advanced_back") {
       state.step = state._advancedFrom ?? 0;
-      return interaction.update(buildStep(state, userId, relayCount, interaction.guild));
+      return interaction.update(buildStep(state, userId, relayCount, interaction.guild, state.locale));
     }
 
     if (action === "advanced_save") {
@@ -291,9 +295,9 @@ module.exports = {
       return interaction.update({
         embeds: [
           new EmbedBuilder()
-            .setTitle("✅ Paramètres avancés sauvegardés !")
+            .setTitle(i18n(interaction.locale).t("setup.advanced.saved"))
             .setColor(0x57f287)
-            .setDescription("Les changements sont actifs immédiatement."),
+            .setDescription(i18n(interaction.locale).t("setup.advanced.savedDesc")),
         ],
         components: [],
       });
@@ -303,26 +307,26 @@ module.exports = {
       const ms2min = (ms) => ms === 0 ? "0" : String(Math.round(ms / 60000));
       const modal = new ModalBuilder()
         .setCustomId(`setup_modal:advanced:${userId}`)
-        .setTitle("Paramètres avancés")
+        .setTitle(i18n(interaction.locale).t("setup.advanced.modalTitle"))
         .addComponents(
           new ActionRowBuilder().addComponents(
-            new TextInputBuilder().setCustomId("silence").setLabel("Silence avant arrêt speaker (ms)")
+            new TextInputBuilder().setCustomId("silence").setLabel(i18n(interaction.locale).t("setup.advanced.labelSilence"))
               .setStyle(TextInputStyle.Short).setValue(String(state.adv_silenceThresholdMs)).setRequired(true).setMaxLength(6)
           ),
           new ActionRowBuilder().addComponents(
-            new TextInputBuilder().setCustomId("buffer").setLabel("Max frames en buffer par speaker")
+            new TextInputBuilder().setCustomId("buffer").setLabel(i18n(interaction.locale).t("setup.advanced.labelBuffer"))
               .setStyle(TextInputStyle.Short).setValue(String(state.adv_maxBufferFrames)).setRequired(true).setMaxLength(4)
           ),
           new ActionRowBuilder().addComponents(
-            new TextInputBuilder().setCustomId("watchdog").setLabel("Watchdog pipeline (ms, 0 = désactivé)")
+            new TextInputBuilder().setCustomId("watchdog").setLabel(i18n(interaction.locale).t("setup.advanced.labelWatchdog"))
               .setStyle(TextInputStyle.Short).setValue(String(state.adv_watchdogThresholdMs)).setRequired(true).setMaxLength(8)
           ),
           new ActionRowBuilder().addComponents(
-            new TextInputBuilder().setCustomId("autodisconnect").setLabel("Auto-disconnect inactivité (min, 0 = off)")
+            new TextInputBuilder().setCustomId("autodisconnect").setLabel(i18n(interaction.locale).t("setup.advanced.labelAutoDisc"))
               .setStyle(TextInputStyle.Short).setValue(ms2min(state.adv_autoDisconnectMs)).setRequired(true).setMaxLength(6)
           ),
           new ActionRowBuilder().addComponents(
-            new TextInputBuilder().setCustomId("loglevel").setLabel("Niveau de log (error/warn/info/debug)")
+            new TextInputBuilder().setCustomId("loglevel").setLabel(i18n(interaction.locale).t("setup.advanced.labelLog"))
               .setStyle(TextInputStyle.Short).setValue(state.adv_logLevel).setRequired(true).setMaxLength(10)
           )
         );
@@ -367,12 +371,9 @@ module.exports = {
       return interaction.update({
         embeds: [
           new EmbedBuilder()
-            .setTitle("✅ Configuration sauvegardée !")
+            .setTitle(i18n(interaction.locale).t("setup.saved"))
             .setColor(0x57f287)
-            .setDescription(
-              "Les changements sont actifs immédiatement.\n" +
-              "Relancez `/start` pour appliquer les nouveaux canaux."
-            ),
+            .setDescription(i18n(interaction.locale).t("setup.savedDesc")),
         ],
         components: [],
       });
@@ -400,7 +401,7 @@ module.exports = {
       state.pendingChannelId   = channel?.id   ?? null;
       state.pendingChannelName = channel?.name ?? `"${query}" introuvable`;
       await interaction.deferUpdate();
-      return interaction.editReply(buildStep(state, userId, relayCount, guild));
+      return interaction.editReply(buildStep(state, userId, relayCount, guild, state.locale));
     }
 
     if (action === "role_search") {
@@ -409,7 +410,7 @@ module.exports = {
       state.pendingRoleId   = role?.id   ?? null;
       state.pendingRoleName = role?.name ?? `"${query}" introuvable`;
       await interaction.deferUpdate();
-      return interaction.editReply(buildStep(state, userId, relayCount, guild));
+      return interaction.editReply(buildStep(state, userId, relayCount, guild, state.locale));
     }
 
     if (action === "staff_search") {
@@ -418,7 +419,7 @@ module.exports = {
       state.pendingRoleId   = role?.id   ?? null;
       state.pendingRoleName = role?.name ?? `"${query}" introuvable`;
       await interaction.deferUpdate();
-      return interaction.editReply(buildStep(state, userId, relayCount, guild));
+      return interaction.editReply(buildStep(state, userId, relayCount, guild, state.locale));
     }
 
     if (action === "alert_search") {
@@ -427,7 +428,7 @@ module.exports = {
       state.pendingChannelId   = channel?.id   ?? null;
       state.pendingChannelName = channel?.name ?? `"${query}" introuvable`;
       await interaction.deferUpdate();
-      return interaction.editReply(buildStep(state, userId, relayCount, guild));
+      return interaction.editReply(buildStep(state, userId, relayCount, guild, state.locale));
     }
 
     if (action === "relay_search") {
@@ -436,14 +437,14 @@ module.exports = {
       state.pendingChannelId   = channel?.id   ?? null;
       state.pendingChannelName = channel?.name ?? `"${query}" introuvable`;
       await interaction.deferUpdate();
-      return interaction.editReply(buildStep(state, userId, relayCount, guild));
+      return interaction.editReply(buildStep(state, userId, relayCount, guild, state.locale));
     }
 
     if (action === "name") {
       state.relayBots[state.currentRelayIndex].name =
         interaction.fields.getTextInputValue("name");
       await interaction.deferUpdate();
-      return interaction.editReply(buildStep(state, userId, relayCount, guild));
+      return interaction.editReply(buildStep(state, userId, relayCount, guild, state.locale));
     }
 
     if (action === "advanced") {
@@ -457,7 +458,7 @@ module.exports = {
       state.adv_logLevel            = parseLog();
 
       await interaction.deferUpdate();
-      return interaction.editReply(buildStep(state, userId, relayCount, guild));
+      return interaction.editReply(buildStep(state, userId, relayCount, guild, state.locale));
     }
   },
 };
@@ -483,7 +484,8 @@ function findRole(guild, query) {
   ) || null;
 }
 
-function buildSearchModal(title, placeholder, customId) {
+function buildSearchModal(title, placeholder, customId, locale) {
+  const { t } = i18n(locale);
   return new ModalBuilder()
     .setCustomId(customId)
     .setTitle(title)
@@ -491,7 +493,7 @@ function buildSearchModal(title, placeholder, customId) {
       new ActionRowBuilder().addComponents(
         new TextInputBuilder()
           .setCustomId("query")
-          .setLabel("Rechercher")
+          .setLabel(t("setup.searchModal.label"))
           .setPlaceholder(placeholder)
           .setStyle(TextInputStyle.Short)
           .setRequired(true)
@@ -502,50 +504,43 @@ function buildSearchModal(title, placeholder, customId) {
 
 // ── Construction des étapes ───────────────────────────────────────────────
 
-function buildStep(state, userId, relayCount, guild) {
-  if (state.step === 0) return buildWelcome(userId);
-  if (state.step === 1) return buildSourceChannel(state, userId);
-  if (state.step === 2) return buildShotcallerRole(state, userId);
-  if (state.step === 3) return buildStaffRole(state, userId);
-  if (state.step === 4) return buildAlertChannel(state, userId);
-  if (state.step === 5) return buildRelayBot(state, userId, relayCount);
-  if (state.step === 6) return buildSummary(state, userId, relayCount);
-  if (state.step === 7) return buildAdvanced(state, userId);
+function buildStep(state, userId, relayCount, guild, locale) {
+  if (state.step === 0) return buildWelcome(userId, locale);
+  if (state.step === 1) return buildSourceChannel(state, userId, locale);
+  if (state.step === 2) return buildShotcallerRole(state, userId, locale);
+  if (state.step === 3) return buildStaffRole(state, userId, locale);
+  if (state.step === 4) return buildAlertChannel(state, userId, locale);
+  if (state.step === 5) return buildRelayBot(state, userId, relayCount, locale);
+  if (state.step === 6) return buildSummary(state, userId, relayCount, locale);
+  if (state.step === 7) return buildAdvanced(state, userId, locale);
 }
 
 // ── Étape 0 — Accueil ─────────────────────────────────────────────────────
 
-function buildWelcome(userId) {
+function buildWelcome(userId, locale) {
+  const { t } = i18n(locale);
   return {
     embeds: [
       new EmbedBuilder()
-        .setTitle("⚙️ Configuration du Broadcast")
+        .setTitle(t("setup.welcome.title"))
         .setColor(0x5865f2)
-        .setDescription(
-          "Cet assistant va vous guider pour configurer le système.\n\n" +
-          "**Étapes :**\n" +
-          "1️⃣  Canal source (Shotcallers)\n" +
-          "2️⃣  Rôle Shotcaller — peut parler + gérer le bot\n" +
-          "3️⃣  Rôle Staff — peut gérer le bot (optionnel)\n" +
-          "4️⃣  Salon d'alertes (optionnel)\n" +
-          "5️⃣  Canal cible de chaque relay bot"
-        ),
+        .setDescription(t("setup.welcome.description")),
     ],
     components: [
       new ActionRowBuilder().addComponents(
         new ButtonBuilder()
           .setCustomId(`setup:start:${userId}`)
-          .setLabel("Démarrer")
+          .setLabel(t("setup.welcome.btnStart"))
           .setStyle(ButtonStyle.Primary)
           .setEmoji("⚙️"),
         new ButtonBuilder()
           .setCustomId(`setup:advanced:${userId}`)
-          .setLabel("Paramètres avancés")
+          .setLabel(t("setup.welcome.btnAdvanced"))
           .setStyle(ButtonStyle.Secondary)
           .setEmoji("🔧"),
         new ButtonBuilder()
           .setCustomId(`setup:cancel:${userId}`)
-          .setLabel("Annuler")
+          .setLabel(t("setup.welcome.btnCancel"))
           .setStyle(ButtonStyle.Secondary)
       ),
     ],
@@ -554,19 +549,20 @@ function buildWelcome(userId) {
 
 // ── Étape 1 — Canal source ────────────────────────────────────────────────
 
-function buildSourceChannel(state, userId) {
+function buildSourceChannel(state, userId, locale) {
+  const { t } = i18n(locale);
   const hasPending = !!state.pendingChannelId;
   const notFound   = state.pendingChannelName?.includes("introuvable");
 
-  let description = "Tapez le nom du canal source (ex: **Shotcallers**).";
-  if (notFound)    description = `❌ **${state.pendingChannelName}**\nVérifiez l'orthographe et réessayez.`;
-  else if (hasPending) description = `J'ai trouvé **#${state.pendingChannelName}**, c'est bien ça ?`;
+  let description = t("setup.step1.description");
+  if (notFound)        description = t("setup.step1.notFound", { name: state.pendingChannelName });
+  else if (hasPending) description = t("setup.step1.found",    { name: state.pendingChannelName });
 
   const rows = [
     new ActionRowBuilder().addComponents(
       new ButtonBuilder()
         .setCustomId(`setup:search_src:${userId}`)
-        .setLabel(hasPending && !notFound ? "Chercher à nouveau" : "Rechercher un canal")
+        .setLabel(hasPending && !notFound ? t("setup.step1.btnResearch") : t("setup.step1.btnSearch"))
         .setStyle(ButtonStyle.Primary)
         .setEmoji("🔍"),
     ),
@@ -574,22 +570,22 @@ function buildSourceChannel(state, userId) {
 
   if (hasPending && !notFound) {
     rows.unshift(new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId(`setup:confirm_src:${userId}`).setLabel("✅ Oui, c'est ça !").setStyle(ButtonStyle.Success),
-      new ButtonBuilder().setCustomId(`setup:retry_src:${userId}`).setLabel("❌ Non, chercher à nouveau").setStyle(ButtonStyle.Danger)
+      new ButtonBuilder().setCustomId(`setup:confirm_src:${userId}`).setLabel(t("setup.step1.btnConfirm")).setStyle(ButtonStyle.Success),
+      new ButtonBuilder().setCustomId(`setup:retry_src:${userId}`).setLabel(t("setup.step1.btnRetry")).setStyle(ButtonStyle.Danger)
     ));
   }
 
-  const navRow1 = [new ButtonBuilder().setCustomId(`setup:cancel:${userId}`).setLabel("Annuler").setStyle(ButtonStyle.Secondary)];
-  if (state.sourceChannelId && !hasPending) navRow1.push(new ButtonBuilder().setCustomId(`setup:next:${userId}`).setLabel("Suivant →").setStyle(ButtonStyle.Primary));
+  const navRow1 = [new ButtonBuilder().setCustomId(`setup:cancel:${userId}`).setLabel(t("setup.step1.btnCancel")).setStyle(ButtonStyle.Secondary)];
+  if (state.sourceChannelId && !hasPending) navRow1.push(new ButtonBuilder().setCustomId(`setup:next:${userId}`).setLabel(t("setup.step1.btnNext")).setStyle(ButtonStyle.Primary));
   rows.push(new ActionRowBuilder().addComponents(...navRow1));
 
   return {
     embeds: [
       new EmbedBuilder()
-        .setTitle("⚙️ Étape 1/5 — Canal source")
+        .setTitle(t("setup.step1.title"))
         .setColor(notFound ? 0xed4245 : hasPending ? 0xfee75c : 0x5865f2)
         .setDescription(description)
-        .addFields({ name: "Canal configuré", value: state.sourceChannelId ? `<#${state.sourceChannelId}>` : "_Non configuré_" }),
+        .addFields({ name: t("setup.step1.fieldName"), value: state.sourceChannelId ? `<#${state.sourceChannelId}>` : t("setup.step1.notSet") }),
     ],
     components: rows,
   };
@@ -597,19 +593,20 @@ function buildSourceChannel(state, userId) {
 
 // ── Étape 2 — Rôle Shotcaller ─────────────────────────────────────────────
 
-function buildShotcallerRole(state, userId) {
+function buildShotcallerRole(state, userId, locale) {
+  const { t } = i18n(locale);
   const hasPending = !!state.pendingRoleId;
   const notFound   = state.pendingRoleName?.includes("introuvable");
 
-  let description = "Tapez le nom du rôle **Shotcaller**.\nCe rôle peut parler (broadcasté) et utiliser `/start` `/stop` `/status`.";
-  if (notFound)    description = `❌ **${state.pendingRoleName}**\nVérifiez l'orthographe et réessayez.`;
-  else if (hasPending) description = `J'ai trouvé le rôle **@${state.pendingRoleName}**, c'est bien ça ?`;
+  let description = t("setup.step2.description");
+  if (notFound)        description = t("setup.step2.notFound", { name: state.pendingRoleName });
+  else if (hasPending) description = t("setup.step2.found",    { name: state.pendingRoleName });
 
   const rows = [
     new ActionRowBuilder().addComponents(
       new ButtonBuilder()
         .setCustomId(`setup:search_role:${userId}`)
-        .setLabel("Rechercher un rôle")
+        .setLabel(t("setup.step2.btnSearch"))
         .setStyle(ButtonStyle.Primary)
         .setEmoji("🔍"),
     ),
@@ -617,22 +614,22 @@ function buildShotcallerRole(state, userId) {
 
   if (hasPending && !notFound) {
     rows.unshift(new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId(`setup:confirm_role:${userId}`).setLabel("✅ Oui, c'est ça !").setStyle(ButtonStyle.Success),
-      new ButtonBuilder().setCustomId(`setup:retry_role:${userId}`).setLabel("❌ Non, chercher à nouveau").setStyle(ButtonStyle.Danger)
+      new ButtonBuilder().setCustomId(`setup:confirm_role:${userId}`).setLabel(t("setup.step2.btnConfirm")).setStyle(ButtonStyle.Success),
+      new ButtonBuilder().setCustomId(`setup:retry_role:${userId}`).setLabel(t("setup.step2.btnRetry")).setStyle(ButtonStyle.Danger)
     ));
   }
 
-  const navRow2 = [new ButtonBuilder().setCustomId(`setup:prev:${userId}`).setLabel("Précédent").setStyle(ButtonStyle.Secondary).setEmoji("◀️"), new ButtonBuilder().setCustomId(`setup:cancel:${userId}`).setLabel("Annuler").setStyle(ButtonStyle.Secondary)];
-  if (state.roleId && !hasPending) navRow2.push(new ButtonBuilder().setCustomId(`setup:next:${userId}`).setLabel("Suivant →").setStyle(ButtonStyle.Primary));
+  const navRow2 = [new ButtonBuilder().setCustomId(`setup:prev:${userId}`).setLabel(t("setup.step2.btnPrev")).setStyle(ButtonStyle.Secondary).setEmoji("◀️"), new ButtonBuilder().setCustomId(`setup:cancel:${userId}`).setLabel(t("setup.step2.btnCancel")).setStyle(ButtonStyle.Secondary)];
+  if (state.roleId && !hasPending) navRow2.push(new ButtonBuilder().setCustomId(`setup:next:${userId}`).setLabel(t("setup.step2.btnNext")).setStyle(ButtonStyle.Primary));
   rows.push(new ActionRowBuilder().addComponents(...navRow2));
 
   return {
     embeds: [
       new EmbedBuilder()
-        .setTitle("⚙️ Étape 2/5 — Rôle Shotcaller")
+        .setTitle(t("setup.step2.title"))
         .setColor(notFound ? 0xed4245 : hasPending ? 0xfee75c : 0x5865f2)
         .setDescription(description)
-        .addFields({ name: "🎤 Rôle Shotcaller configuré", value: state.roleId ? `<@&${state.roleId}>` : "_Non configuré_" }),
+        .addFields({ name: t("setup.step2.fieldName"), value: state.roleId ? `<@&${state.roleId}>` : t("setup.step2.notSet") }),
     ],
     components: rows,
   };
@@ -640,19 +637,20 @@ function buildShotcallerRole(state, userId) {
 
 // ── Étape 3 — Rôle Staff ─────────────────────────────────────────────────
 
-function buildStaffRole(state, userId) {
+function buildStaffRole(state, userId, locale) {
+  const { t } = i18n(locale);
   const hasPending = !!state.pendingRoleId;
   const notFound   = state.pendingRoleName?.includes("introuvable");
 
-  let description = "Tapez le nom du rôle **Staff** _(optionnel)_.\nCe rôle peut utiliser `/start` `/stop` `/status`, mais ne sera **pas** broadcasté.";
-  if (notFound)    description = `❌ **${state.pendingRoleName}**\nVérifiez l'orthographe et réessayez.`;
-  else if (hasPending) description = `J'ai trouvé le rôle **@${state.pendingRoleName}**, c'est bien ça ?`;
+  let description = t("setup.step3.description");
+  if (notFound)        description = t("setup.step3.notFound", { name: state.pendingRoleName });
+  else if (hasPending) description = t("setup.step3.found",    { name: state.pendingRoleName });
 
   const rows = [
     new ActionRowBuilder().addComponents(
       new ButtonBuilder()
         .setCustomId(`setup:search_staff:${userId}`)
-        .setLabel("Rechercher un rôle")
+        .setLabel(t("setup.step3.btnSearch"))
         .setStyle(ButtonStyle.Primary)
         .setEmoji("🔍"),
     ),
@@ -660,26 +658,26 @@ function buildStaffRole(state, userId) {
 
   if (hasPending && !notFound) {
     rows.unshift(new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId(`setup:confirm_staff:${userId}`).setLabel("✅ Oui, c'est ça !").setStyle(ButtonStyle.Success),
-      new ButtonBuilder().setCustomId(`setup:retry_staff:${userId}`).setLabel("❌ Non, chercher à nouveau").setStyle(ButtonStyle.Danger)
+      new ButtonBuilder().setCustomId(`setup:confirm_staff:${userId}`).setLabel(t("setup.step3.btnConfirm")).setStyle(ButtonStyle.Success),
+      new ButtonBuilder().setCustomId(`setup:retry_staff:${userId}`).setLabel(t("setup.step3.btnRetry")).setStyle(ButtonStyle.Danger)
     ));
   }
 
   const navRow3 = [
-    new ButtonBuilder().setCustomId(`setup:prev:${userId}`).setLabel("Précédent").setStyle(ButtonStyle.Secondary).setEmoji("◀️"),
-    new ButtonBuilder().setCustomId(`setup:skip_staff:${userId}`).setLabel("Ignorer →").setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId(`setup:prev:${userId}`).setLabel(t("setup.step3.btnPrev")).setStyle(ButtonStyle.Secondary).setEmoji("◀️"),
+    new ButtonBuilder().setCustomId(`setup:skip_staff:${userId}`).setLabel(t("setup.step3.btnSkip")).setStyle(ButtonStyle.Secondary),
   ];
-  if (state.staffRoleId && !hasPending) navRow3.push(new ButtonBuilder().setCustomId(`setup:next:${userId}`).setLabel("Suivant →").setStyle(ButtonStyle.Primary));
-  navRow3.push(new ButtonBuilder().setCustomId(`setup:cancel:${userId}`).setLabel("Annuler").setStyle(ButtonStyle.Danger));
+  if (state.staffRoleId && !hasPending) navRow3.push(new ButtonBuilder().setCustomId(`setup:next:${userId}`).setLabel(t("setup.step3.btnNext")).setStyle(ButtonStyle.Primary));
+  navRow3.push(new ButtonBuilder().setCustomId(`setup:cancel:${userId}`).setLabel(t("setup.step3.btnCancel")).setStyle(ButtonStyle.Danger));
   rows.push(new ActionRowBuilder().addComponents(...navRow3));
 
   return {
     embeds: [
       new EmbedBuilder()
-        .setTitle("⚙️ Étape 3/5 — Rôle Staff (optionnel)")
+        .setTitle(t("setup.step3.title"))
         .setColor(notFound ? 0xed4245 : hasPending ? 0xfee75c : 0x5865f2)
         .setDescription(description)
-        .addFields({ name: "🛡️ Rôle Staff configuré", value: state.staffRoleId ? `<@&${state.staffRoleId}>` : "_Aucun_" }),
+        .addFields({ name: t("setup.step3.fieldName"), value: state.staffRoleId ? `<@&${state.staffRoleId}>` : t("setup.step3.notSet") }),
     ],
     components: rows,
   };
@@ -687,19 +685,20 @@ function buildStaffRole(state, userId) {
 
 // ── Étape 4 — Salon d'alertes ────────────────────────────────────────────
 
-function buildAlertChannel(state, userId) {
+function buildAlertChannel(state, userId, locale) {
+  const { t } = i18n(locale);
   const hasPending = !!state.pendingChannelId;
   const notFound   = state.pendingChannelName?.includes("introuvable");
 
-  let description = "Tapez le nom du **salon texte** où envoyer les alertes de déconnexion _(optionnel)_.";
-  if (notFound)        description = `❌ **${state.pendingChannelName}**\nVérifiez l'orthographe et réessayez.`;
-  else if (hasPending) description = `J'ai trouvé **#${state.pendingChannelName}**, c'est bien ça ?`;
+  let description = t("setup.step4.description");
+  if (notFound)        description = t("setup.step4.notFound", { name: state.pendingChannelName });
+  else if (hasPending) description = t("setup.step4.found",    { name: state.pendingChannelName });
 
   const rows = [
     new ActionRowBuilder().addComponents(
       new ButtonBuilder()
         .setCustomId(`setup:search_alert:${userId}`)
-        .setLabel("Rechercher un salon")
+        .setLabel(t("setup.step4.btnSearch"))
         .setStyle(ButtonStyle.Primary)
         .setEmoji("🔍"),
     ),
@@ -707,30 +706,30 @@ function buildAlertChannel(state, userId) {
 
   if (hasPending && !notFound) {
     rows.unshift(new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId(`setup:confirm_alert:${userId}`).setLabel("✅ Oui, c'est ça !").setStyle(ButtonStyle.Success),
-      new ButtonBuilder().setCustomId(`setup:retry_alert:${userId}`).setLabel("❌ Non, chercher à nouveau").setStyle(ButtonStyle.Danger)
+      new ButtonBuilder().setCustomId(`setup:confirm_alert:${userId}`).setLabel(t("setup.step4.btnConfirm")).setStyle(ButtonStyle.Success),
+      new ButtonBuilder().setCustomId(`setup:retry_alert:${userId}`).setLabel(t("setup.step4.btnRetry")).setStyle(ButtonStyle.Danger)
     ));
   }
 
   const navRow4 = [
-    new ButtonBuilder().setCustomId(`setup:prev:${userId}`).setLabel("Précédent").setStyle(ButtonStyle.Secondary).setEmoji("◀️"),
-    new ButtonBuilder().setCustomId(`setup:skip_alert:${userId}`).setLabel("Ignorer →").setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId(`setup:prev:${userId}`).setLabel(t("setup.step4.btnPrev")).setStyle(ButtonStyle.Secondary).setEmoji("◀️"),
+    new ButtonBuilder().setCustomId(`setup:skip_alert:${userId}`).setLabel(t("setup.step4.btnSkip")).setStyle(ButtonStyle.Secondary),
   ];
   if (state.alertChannelId && !hasPending) {
-    navRow4.push(new ButtonBuilder().setCustomId(`setup:next:${userId}`).setLabel("Suivant →").setStyle(ButtonStyle.Primary));
+    navRow4.push(new ButtonBuilder().setCustomId(`setup:next:${userId}`).setLabel(t("setup.step4.btnNext")).setStyle(ButtonStyle.Primary));
   }
-  navRow4.push(new ButtonBuilder().setCustomId(`setup:cancel:${userId}`).setLabel("Annuler").setStyle(ButtonStyle.Danger));
+  navRow4.push(new ButtonBuilder().setCustomId(`setup:cancel:${userId}`).setLabel(t("setup.step4.btnCancel")).setStyle(ButtonStyle.Danger));
   rows.push(new ActionRowBuilder().addComponents(...navRow4));
 
   return {
     embeds: [
       new EmbedBuilder()
-        .setTitle("⚙️ Étape 4/5 — Salon d'alertes (optionnel)")
+        .setTitle(t("setup.step4.title"))
         .setColor(notFound ? 0xed4245 : hasPending ? 0xfee75c : 0x5865f2)
         .setDescription(description)
         .addFields({
-          name:  "🔔 Salon configuré",
-          value: state.alertChannelId ? `<#${state.alertChannelId}>` : "_Aucun_",
+          name:  t("setup.step4.fieldName"),
+          value: state.alertChannelId ? `<#${state.alertChannelId}>` : t("setup.step4.notSet"),
         }),
     ],
     components: rows,
@@ -739,22 +738,23 @@ function buildAlertChannel(state, userId) {
 
 // ── Étape 5 — Relay bots ──────────────────────────────────────────────────
 
-function buildRelayBot(state, userId, relayCount) {
+function buildRelayBot(state, userId, relayCount, locale) {
+  const { t } = i18n(locale);
   const idx        = state.currentRelayIndex;
   const bot        = state.relayBots[idx];
   const hasPending = !!state.pendingChannelId;
   const notFound   = state.pendingChannelName?.includes("introuvable");
   const isLast     = idx === relayCount - 1;
 
-  let description = `Tapez le nom du canal cible pour **${bot.name}** (ex: Team ${idx + 1}).`;
-  if (notFound)    description = `❌ **${state.pendingChannelName}**\nVérifiez l'orthographe et réessayez.`;
-  else if (hasPending) description = `J'ai trouvé **#${state.pendingChannelName}**, c'est bien ça ?`;
+  let description = t("setup.step5.description", { name: bot.name, index: idx + 1 });
+  if (notFound)        description = t("setup.step5.notFound", { name: state.pendingChannelName });
+  else if (hasPending) description = t("setup.step5.found",    { name: state.pendingChannelName });
 
   const rows = [
     new ActionRowBuilder().addComponents(
       new ButtonBuilder()
         .setCustomId(`setup:search_relay:${userId}`)
-        .setLabel("Rechercher un canal")
+        .setLabel(t("setup.step5.btnSearch"))
         .setStyle(ButtonStyle.Primary)
         .setEmoji("🔍"),
     ),
@@ -762,17 +762,17 @@ function buildRelayBot(state, userId, relayCount) {
 
   if (hasPending && !notFound) {
     rows.unshift(new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId(`setup:confirm_relay:${userId}`).setLabel("✅ Oui, c'est ça !").setStyle(ButtonStyle.Success),
-      new ButtonBuilder().setCustomId(`setup:retry_relay:${userId}`).setLabel("❌ Non, chercher à nouveau").setStyle(ButtonStyle.Danger)
+      new ButtonBuilder().setCustomId(`setup:confirm_relay:${userId}`).setLabel(t("setup.step5.btnConfirm")).setStyle(ButtonStyle.Success),
+      new ButtonBuilder().setCustomId(`setup:retry_relay:${userId}`).setLabel(t("setup.step5.btnRetry")).setStyle(ButtonStyle.Danger)
     ));
   }
 
   rows.push(new ActionRowBuilder().addComponents(
-    new ButtonBuilder().setCustomId(`setup:prev:${userId}`).setLabel("Précédent").setStyle(ButtonStyle.Secondary).setEmoji("◀️"),
-    new ButtonBuilder().setCustomId(`setup:relay_name:${userId}`).setLabel("✏️ Modifier le nom").setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId(`setup:prev:${userId}`).setLabel(t("setup.step5.btnPrev")).setStyle(ButtonStyle.Secondary).setEmoji("◀️"),
+    new ButtonBuilder().setCustomId(`setup:relay_name:${userId}`).setLabel(t("setup.step5.btnName")).setStyle(ButtonStyle.Secondary),
     new ButtonBuilder()
       .setCustomId(`setup:next:${userId}`)
-      .setLabel(isLast ? "Récapitulatif →" : "Suivant →")
+      .setLabel(isLast ? t("setup.step5.btnSummary") : t("setup.step5.btnNext"))
       .setStyle(bot.channelId ? ButtonStyle.Primary : ButtonStyle.Secondary)
       .setDisabled(!bot.channelId)
   ));
@@ -780,12 +780,12 @@ function buildRelayBot(state, userId, relayCount) {
   return {
     embeds: [
       new EmbedBuilder()
-        .setTitle(`⚙️ Étape 5/5 — Relay bot ${idx + 1}/${relayCount}`)
+        .setTitle(t("setup.step5.title", { index: idx + 1, total: relayCount }))
         .setColor(notFound ? 0xed4245 : hasPending ? 0xfee75c : 0x5865f2)
         .setDescription(description)
         .addFields(
-          { name: "📢 Canal configuré", value: bot.channelId ? `<#${bot.channelId}>` : "_Non configuré_", inline: true },
-          { name: "🏷️ Nom",            value: bot.name,                                                   inline: true }
+          { name: t("setup.step5.fieldChan"), value: bot.channelId ? `<#${bot.channelId}>` : t("setup.step5.notSet"), inline: true },
+          { name: t("setup.step5.fieldName"), value: bot.name, inline: true }
         ),
     ],
     components: rows,
@@ -794,59 +794,48 @@ function buildRelayBot(state, userId, relayCount) {
 
 // ── Étape 7 — Paramètres avancés ─────────────────────────────────────────
 
-function buildAdvanced(state, userId) {
+function buildAdvanced(state, userId, locale) {
+  const { t } = i18n(locale);
   const min2str = (ms) => ms === 0 ? "désactivé" : `${Math.round(ms / 60000)} min`;
 
   return {
     embeds: [
       new EmbedBuilder()
-        .setTitle("🔧 Paramètres avancés")
+        .setTitle(t("setup.advanced.title"))
         .setColor(0x5865f2)
-        .setDescription(
-          "Ces paramètres affectent le comportement audio et la robustesse du système.\n" +
-          "Cliquez sur **Modifier** pour changer les valeurs."
-        )
+        .setDescription(t("setup.advanced.description"))
         .addFields(
+          { name: t("setup.advanced.silence"), value: t("setup.advanced.silenceVal", { ms: state.adv_silenceThresholdMs }) },
+          { name: t("setup.advanced.buffer"),  value: t("setup.advanced.bufferVal",  { frames: state.adv_maxBufferFrames, ms: state.adv_maxBufferFrames * 20 }) },
           {
-            name:  "🔇 Silence avant arrêt speaker",
-            value: `\`${state.adv_silenceThresholdMs} ms\` — délai avant de considérer qu'un speaker a arrêté de parler`,
-          },
-          {
-            name:  "📦 Buffer max par speaker",
-            value: `\`${state.adv_maxBufferFrames} frames\` — soit ${state.adv_maxBufferFrames * 20} ms de buffer avant drop`,
-          },
-          {
-            name:  "🐕 Watchdog pipeline",
+            name:  t("setup.advanced.watchdog"),
             value: state.adv_watchdogThresholdMs === 0
-              ? "🔴 Désactivé"
-              : `🟢 Redémarre si bloqué > \`${state.adv_watchdogThresholdMs} ms\``,
+              ? t("setup.advanced.watchdogOff")
+              : t("setup.advanced.watchdogOn", { ms: state.adv_watchdogThresholdMs }),
           },
           {
-            name:  "💤 Auto-disconnect",
+            name:  t("setup.advanced.autodiscon"),
             value: state.adv_autoDisconnectMs === 0
-              ? "🔴 Désactivé"
-              : `🟢 Arrête le broadcast après \`${min2str(state.adv_autoDisconnectMs)}\` d'inactivité`,
+              ? t("setup.advanced.autodisconOff")
+              : t("setup.advanced.autodisconOn", { time: min2str(state.adv_autoDisconnectMs) }),
           },
-          {
-            name:  "📋 Niveau de log",
-            value: `\`${state.adv_logLevel}\``,
-          }
+          { name: t("setup.advanced.loglevel"), value: `\`${state.adv_logLevel}\`` }
         ),
     ],
     components: [
       new ActionRowBuilder().addComponents(
         new ButtonBuilder()
           .setCustomId(`setup:advanced_back:${userId}`)
-          .setLabel("Retour")
+          .setLabel(t("setup.advanced.btnBack"))
           .setStyle(ButtonStyle.Secondary)
           .setEmoji("◀️"),
         new ButtonBuilder()
           .setCustomId(`setup:advanced_edit:${userId}`)
-          .setLabel("✏️ Modifier")
+          .setLabel(t("setup.advanced.btnEdit"))
           .setStyle(ButtonStyle.Primary),
         new ButtonBuilder()
           .setCustomId(`setup:advanced_save:${userId}`)
-          .setLabel("💾 Sauvegarder")
+          .setLabel(t("setup.advanced.btnSave"))
           .setStyle(ButtonStyle.Success),
       ),
     ],
@@ -855,7 +844,8 @@ function buildAdvanced(state, userId) {
 
 // ── Étape 6 — Récapitulatif ───────────────────────────────────────────────
 
-function buildSummary(state, userId, relayCount) {
+function buildSummary(state, userId, relayCount, locale) {
+  const { t } = i18n(locale);
   const relayLines = state.relayBots
     .slice(0, relayCount)
     .map((b) => `**${b.name}** → ${b.channelId ? `<#${b.channelId}>` : "❌ Non configuré"}`)
@@ -869,31 +859,27 @@ function buildSummary(state, userId, relayCount) {
   return {
     embeds: [
       new EmbedBuilder()
-        .setTitle("⚙️ Récapitulatif")
+        .setTitle(t("setup.summary.title"))
         .setColor(allOk ? 0x57f287 : 0xfee75c)
-        .setDescription(
-          allOk
-            ? "Tout est configuré. Cliquez sur **Sauvegarder** pour appliquer."
-            : "⚠️ Certains éléments ne sont pas encore configurés."
-        )
+        .setDescription(allOk ? t("setup.summary.descOk") : t("setup.summary.descWarning"))
         .addFields(
-          { name: "📥 Canal source",     value: state.sourceChannelId ? `<#${state.sourceChannelId}>` : "❌ Non configuré" },
-          { name: "🎤 Rôle Shotcaller",  value: state.roleId          ? `<@&${state.roleId}>`         : "❌ Non configuré" },
-          { name: "🛡️ Rôle Staff",      value: state.staffRoleId    ? `<@&${state.staffRoleId}>`   : "_Aucun_" },
-          { name: "🔔 Salon d'alertes",  value: state.alertChannelId ? `<#${state.alertChannelId}>` : "_Aucun_" },
-          { name: "📢 Relay bots",       value: relayLines || "_Aucun_" }
+          { name: t("setup.summary.fieldSource"), value: state.sourceChannelId ? `<#${state.sourceChannelId}>` : t("setup.summary.notSet") },
+          { name: t("setup.summary.fieldRole"),   value: state.roleId          ? `<@&${state.roleId}>`         : t("setup.summary.notSet") },
+          { name: t("setup.summary.fieldStaff"),  value: state.staffRoleId    ? `<@&${state.staffRoleId}>`   : t("setup.summary.none") },
+          { name: t("setup.summary.fieldAlert"),  value: state.alertChannelId ? `<#${state.alertChannelId}>` : t("setup.summary.none") },
+          { name: t("setup.summary.fieldRelays"), value: relayLines || t("setup.summary.none") }
         ),
     ],
     components: [
       new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId(`setup:prev:${userId}`).setLabel("Précédent").setStyle(ButtonStyle.Secondary).setEmoji("◀️"),
+        new ButtonBuilder().setCustomId(`setup:prev:${userId}`).setLabel(t("setup.summary.btnPrev")).setStyle(ButtonStyle.Secondary).setEmoji("◀️"),
         new ButtonBuilder()
           .setCustomId(`setup:advanced:${userId}`)
-          .setLabel("🔧 Avancé")
+          .setLabel(t("setup.summary.btnAdvanced"))
           .setStyle(ButtonStyle.Secondary),
         new ButtonBuilder()
           .setCustomId(`setup:save:${userId}`)
-          .setLabel("💾 Sauvegarder")
+          .setLabel(t("setup.summary.btnSave"))
           .setStyle(allOk ? ButtonStyle.Success : ButtonStyle.Secondary)
           .setDisabled(!allOk)
       ),

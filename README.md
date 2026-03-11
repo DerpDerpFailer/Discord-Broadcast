@@ -35,8 +35,15 @@ src/
 │   ├── setup.js          ← /setup (wizard de configuration interactif)
 │   ├── mute.js           ← /mute (panel boutons pour muter/démuter un relay)
 │   └── volume.js         ← /volume (panel boutons + modale pour ajuster le volume d'un relay)
+├── i18n/
+│   ├── index.js          ← Fonction t(key, vars), détection locale, fallback FR
+│   ├── fr.js             ← Strings françaises (langue par défaut)
+│   └── en.js             ← Strings anglaises (en-US, en-GB)
 └── utils/
     └── logger.js         ← Winston structuré
+scripts/
+├── register-commands.js  ← Enregistrement des slash commands (manuel, une seule fois)
+└── healthcheck.js        ← Vérifie l'état réel des bots (utilisé par Docker HEALTHCHECK)
 ```
 
 ### Principes clés
@@ -215,11 +222,12 @@ La configuration est sauvegardée dans `/data/config.json` et s'applique **immé
 
 ### Reconnexion automatique (backoff exponentiel)
 
-Si un relay bot perd sa connexion voice, il tente de se reconnecter automatiquement :
+Si un relay bot **ou le master bot** perd sa connexion voice, il tente de se reconnecter automatiquement :
 
 - Délais : 2s → 4s → 8s → 16s → 30s (max)
 - Après 3 tentatives échouées (~54s) : alerte envoyée dans le salon d'alertes
 - À la reconnexion : alerte de rétablissement envoyée
+- Le master bot applique le même mécanisme — si la source se coupe, le broadcast reprend automatiquement sans intervention
 
 ### Watchdog pipeline
 
@@ -237,12 +245,37 @@ Si le canal source est inactif depuis `AUTO_DISCONNECT_MS` (défaut 10 min) :
 - Alerte Discord envoyée
 - Relancer `/start` pour reprendre le broadcast
 
+### Health check Docker
+
+Le conteneur expose un état `healthy` / `unhealthy` visible dans Portainer et via `docker inspect`.
+
+Le script `scripts/healthcheck.js` est exécuté toutes les 30s par Docker et vérifie :
+
+- Le fichier `/tmp/health.json` existe et a été mis à jour il y a moins de 90s (sinon le process est bloqué)
+- Le master bot est connecté à Discord
+- Au moins un relay bot est connecté à Discord
+
+Un broadcast arrêté volontairement (`/stop`) ne rend **pas** le conteneur unhealthy — les clients Discord restent connectés.
+
+```bash
+# Tester manuellement
+docker exec discord-broadcast node scripts/healthcheck.js
+
+# Voir le statut Docker
+docker inspect discord-broadcast --format='{{.State.Health.Status}}'
+
+# Historique des checks
+docker inspect discord-broadcast --format='{{range .State.Health.Log}}{{.End}} — {{.Output}}{{end}}'
+```
+
 ### Alertes Discord
 
 Les alertes sont envoyées dans le salon configuré via `/setup` pour :
 
 - Déconnexion d'un relay bot après 3 tentatives échouées
 - Rétablissement d'un relay bot
+- Déconnexion du master bot après 3 tentatives échouées
+- Rétablissement du master bot
 - Déclenchement du watchdog pipeline
 - Auto-disconnect pour inactivité prolongée
 
@@ -297,6 +330,20 @@ Les bots peuvent mettre jusqu'à 60 secondes pour établir la connexion voice (n
 ### Chiffrement Discord
 Discord impose depuis 2025 le mode `aead_xchacha20_poly1305_rtpsize`. Le package `@snazzah/davey` est requis pour la compatibilité — il est inclus dans `package.json`.
 
+### Rebuild de l'image Docker
+
+Nécessaire uniquement si le `Dockerfile` est modifié. Pour les changements JS, le redéploiement Portainer suffit.
+
+```bash
+# Sur le serveur via SSH
+cd /chemin/vers/discord-broadcast
+git pull
+sudo docker compose build
+sudo docker compose up -d
+```
+
+> Le bouton **"Re-pull image and redeploy"** de Portainer échoue car l'image n'est pas publiée sur un registry — c'est normal. Utiliser **"Update the stack"** ou rebuilder manuellement via SSH.
+
 ### Rollback
 ```bash
 # Revenir à une version taguée
@@ -317,6 +364,8 @@ sudo docker restart discord-broadcast
 | `v1.3.0` | Watchdog pipeline + auto-disconnect + /setup avancé |
 | `v1.4.0` | /mute et /volume par speaker (ancienne implémentation) |
 | `v1.5.0` | /mute et /volume interactifs par relay bot (boutons + modale) |
+| `v1.6.0` | Alertes reconnexion master bot + health check Docker réel |
+| `v1.7.0` | Localisation FR/EN — interface et commandes bilingues |
 
 ---
 
@@ -335,6 +384,55 @@ docker exec discord-broadcast node -e "const c = require('./src/config'); consol
 # Tester le système d'alertes (couper Discord ~60s puis rétablir)
 sudo iptables -A OUTPUT -d 162.159.0.0/16 -j DROP
 sudo iptables -D OUTPUT -d 162.159.0.0/16 -j DROP
+
+# Tester le health check
+docker exec discord-broadcast node scripts/healthcheck.js
+docker inspect discord-broadcast --format='{{.State.Health.Status}}'
+```
+
+---
+
+## Localisation (FR / EN)
+
+Le bot détecte automatiquement la langue Discord de l'utilisateur et répond dans sa langue.
+
+| Locale Discord | Langue utilisée |
+|---|---|
+| `fr` | Français (langue par défaut) |
+| `en-US`, `en-GB` | Anglais |
+| Toute autre locale | Français (fallback) |
+
+Les descriptions des commandes slash dans le menu `/` sont également localisées — un utilisateur avec Discord en anglais verra les descriptions en anglais directement dans l'interface.
+
+### Architecture
+
+```
+src/i18n/
+├── index.js   ← Moteur : t(key, vars), détection locale, fallback FR
+├── fr.js      ← Strings françaises
+└── en.js      ← Strings anglaises
+```
+
+Chaque commande appelle `i18n(interaction.locale)` pour obtenir `t()` :
+
+```js
+const { t } = i18n(interaction.locale);
+t("start.success", { source: "#shotcallers", count: 8, total: 8 })
+// → "✅ **Broadcast démarré !**\n\n🎧 Source : #shotcallers\n📢 Relays connectés : **8/8**"
+```
+
+### Ajouter une langue
+
+1. Créer `src/i18n/xx.js` en copiant `en.js` et en traduisant les valeurs
+2. Ajouter la langue dans `src/i18n/index.js` :
+
+```js
+const xx = require("./xx");
+const SUPPORTED = { fr, en, xx };
+const LOCALE_MAP = {
+  "xx":    "xx",   // code locale Discord
+  // ...
+};
 ```
 
 ---
