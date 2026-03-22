@@ -152,11 +152,23 @@ node scripts/register-commands.js
 | Commande | Effet |
 |---|---|
 | `/start` | Tous les bots rejoignent leurs canaux, broadcast actif |
+| `/start [nombre]` | Démarre uniquement les N premiers relay bots |
 | `/stop` | Tous les bots quittent leurs canaux |
-| `/status` | Affiche l'état, les speakers actifs, les stats par relay |
+| `/status` | Affiche l'état, les speakers actifs, les stats par relay (bouton 🔄 Actualiser) |
 | `/setup` | Lance le wizard de configuration interactif |
 | `/mute` | Panel interactif pour muter/démuter un relay bot |
 | `/volume` | Panel interactif pour ajuster le volume d'un relay bot |
+
+### /start — Démarrage partiel
+
+Il est possible de ne démarrer qu'une partie des relay bots :
+
+```
+/start 4   → démarre uniquement les 4 premiers relay bots
+/start     → démarre tous les relay bots
+```
+
+Les relay bots non démarrés apparaissent en ⚫ dans `/status` (distinction avec 🔴 qui indique une erreur). L'état se réinitialise au prochain `/stop`.
 
 ### /mute — Mute par relay bot
 
@@ -366,6 +378,7 @@ sudo docker restart discord-broadcast
 | `v1.5.0` | /mute et /volume interactifs par relay bot (boutons + modale) |
 | `v1.6.0` | Alertes reconnexion master bot + health check Docker réel |
 | `v1.7.0` | Localisation FR/EN — interface et commandes bilingues |
+| `v1.8.0` | /start [nombre] + état ⚫ relay bots non démarrés + bouton refresh /status |
 
 ---
 
@@ -408,7 +421,7 @@ Les descriptions des commandes slash dans le menu `/` sont également localisée
 
 ```
 src/i18n/
-├── index.js   ← Moteur : t(key, vars), détection locale, fallback FR
+├── index.js   ← Moteur : t(key, vars), détection locale, fallback EN
 ├── fr.js      ← Strings françaises
 └── en.js      ← Strings anglaises
 ```
