@@ -60,6 +60,7 @@ class RelayBot {
     this._reconnectAttempts = 0;
     this._reconnectTimer    = null;
     this._alertSent         = false;
+    this._disabled          = false; // true si volontairement non démarré
     this.alertCallback      = null; // set by index.js after login
   }
 
@@ -300,6 +301,7 @@ class RelayBot {
       connected:         this._connected,
       broadcasting:      this._broadcasting,
       registered:        this._registered,
+      disabled:          this._disabled,
       reconnectAttempts: this._reconnectAttempts,
       playerStatus:      this.player?.state?.status ?? "none",
       queueDepth:        this.pcmStream?.queueDepth ?? 0,

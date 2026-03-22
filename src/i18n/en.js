@@ -40,6 +40,7 @@ module.exports = {
     relayOnline:     "🟢 {{count}} online",
     relayRecon:      "🟡 {{count}} reconnecting",
     relayOffline:    "🔴 {{count}} offline",
+    relayDisabled:   "⚫ {{count}} not started",
     relayReconNote:  "_(reconnecting… attempt {{count}})_",
     relayAlertNote:  "⚠️ _{{count}} failed attempts_",
     btnRefresh:      "Refresh",

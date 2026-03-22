@@ -33,6 +33,9 @@ module.exports = {
     const count  = nombre ? Math.min(nombre, total) : total;
     const bots   = masterBot._relayBots.slice(0, count);
 
+    // Marquer les bots non démarrés comme volontairement désactivés
+    masterBot._relayBots.forEach((bot, i) => { bot._disabled = i >= count; });
+
     await interaction.deferReply();
     logger.info("Commande start reçue", { user: interaction.user.tag, bots: count, total });
 

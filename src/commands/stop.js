@@ -22,6 +22,7 @@ module.exports = {
 
     try {
       await Promise.allSettled(masterBot._relayBots.map((bot) => bot.stopBroadcast()));
+      masterBot._relayBots.forEach((bot) => { bot._disabled = false; });
       await masterBot.stopBroadcast();
       await interaction.editReply({ content: t("stop.success") });
     } catch (err) {

@@ -70,8 +70,9 @@ function buildStatusPayload(masterBot, t) {
     const lines = relayBots.map((bot) => {
       const s = bot.getStatus();
       let icon;
-      if (s.connected && s.registered)         icon = "🟢";
-      else if (s.broadcasting && !s.connected) icon = "🟡";
+      if (s.disabled)                           icon = "⚫";
+      else if (s.connected && s.registered)     icon = "🟢";
+      else if (s.broadcasting && !s.connected)  icon = "🟡";
       else                                      icon = "🔴";
 
       const parts = [`${icon} **${s.name}** — <#${s.channelId}>`];
@@ -84,13 +85,15 @@ function buildStatusPayload(masterBot, t) {
       return parts.join(" ");
     });
 
-    const online  = relayBots.filter((b) => b.getStatus().connected).length;
-    const recon   = relayBots.filter((b) => { const s = b.getStatus(); return s.broadcasting && !s.connected; }).length;
-    const offline = relayBots.length - online - recon;
+    const online   = relayBots.filter((b) => b.getStatus().connected).length;
+    const recon    = relayBots.filter((b) => { const s = b.getStatus(); return s.broadcasting && !s.connected; }).length;
+    const disabled = relayBots.filter((b) => b.getStatus().disabled).length;
+    const offline  = relayBots.length - online - recon - disabled;
 
     const summaryParts = [t("status.relayOnline", { count: online })];
-    if (recon   > 0) summaryParts.push(t("status.relayRecon",   { count: recon }));
-    if (offline > 0) summaryParts.push(t("status.relayOffline", { count: offline }));
+    if (recon    > 0) summaryParts.push(t("status.relayRecon",    { count: recon }));
+    if (offline  > 0) summaryParts.push(t("status.relayOffline",  { count: offline }));
+    if (disabled > 0) summaryParts.push(t("status.relayDisabled", { count: disabled }));
 
     embed.addFields({
       name:  t("status.relaysTitle", { summary: summaryParts.join(" · ") }),
