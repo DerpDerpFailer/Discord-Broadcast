@@ -9,7 +9,16 @@ module.exports = {
   data: new SlashCommandBuilder()
     .setName("start")
     .setDescription("Démarre le broadcast vocal vers tous les canaux cibles")
-    .setDescriptionLocalizations({ "en-US": "Start the voice broadcast to all target channels", "en-GB": "Start the voice broadcast to all target channels" }),
+    .setDescriptionLocalizations({ "en-US": "Start the voice broadcast to all target channels", "en-GB": "Start the voice broadcast to all target channels" })
+    .addIntegerOption((opt) =>
+      opt
+        .setName("nombre")
+        .setNameLocalizations({ "en-US": "count", "en-GB": "count" })
+        .setDescription("Nombre de relay bots à démarrer (défaut : tous)")
+        .setDescriptionLocalizations({ "en-US": "Number of relay bots to start (default: all)", "en-GB": "Number of relay bots to start (default: all)" })
+        .setMinValue(1)
+        .setRequired(false)
+    ),
 
   async execute(interaction, masterBot) {
     const { t } = i18n(interaction.locale);
@@ -18,15 +27,19 @@ module.exports = {
       return interaction.reply({ content: t("start.alreadyRunning"), ephemeral: true });
     }
 
+    // Paramètre optionnel — null si non fourni
+    const nombre = interaction.options.getInteger("nombre") ?? interaction.options.getInteger("count");
+    const total  = masterBot._relayBots.length;
+    const count  = nombre ? Math.min(nombre, total) : total;
+    const bots   = masterBot._relayBots.slice(0, count);
+
     await interaction.deferReply();
-    logger.info("Commande start reçue", { user: interaction.user.tag });
+    logger.info("Commande start reçue", { user: interaction.user.tag, bots: count, total });
 
     try {
       await masterBot.startBroadcast();
 
-      const results = await Promise.allSettled(
-        masterBot._relayBots.map((bot) => bot.startBroadcast())
-      );
+      const results = await Promise.allSettled(bots.map((bot) => bot.startBroadcast()));
 
       const failed  = results.filter((r) => r.status === "rejected");
       const success = results.filter((r) => r.status === "fulfilled");
@@ -34,9 +47,10 @@ module.exports = {
       let content = t("start.success", {
         source: `<#${config.sourceChannelId}>`,
         count:  success.length,
-        total:  masterBot._relayBots.length,
+        total:  count,
       });
 
+      if (count < total) content += t("start.partial", { count, total });
       if (failed.length > 0) content += t("start.successWarning", { failed: failed.length });
       content += "\n\n" + t("start.hint");
 

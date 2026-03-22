@@ -34,7 +34,16 @@ const commands = [
   new SlashCommandBuilder()
     .setName("start")
     .setDescription("Démarre le broadcast vocal vers tous les canaux cibles")
-    .setDescriptionLocalizations(loc("Start the voice broadcast to all target channels")),
+    .setDescriptionLocalizations(loc("Start the voice broadcast to all target channels"))
+    .addIntegerOption((opt) =>
+      opt
+        .setName("nombre")
+        .setNameLocalizations({ "en-US": "count", "en-GB": "count" })
+        .setDescription("Nombre de relay bots à démarrer (défaut : tous)")
+        .setDescriptionLocalizations({ "en-US": "Number of relay bots to start (default: all)", "en-GB": "Number of relay bots to start (default: all)" })
+        .setMinValue(1)
+        .setRequired(false)
+    ),
   new SlashCommandBuilder()
     .setName("stop")
     .setDescription("Arrête le broadcast vocal")

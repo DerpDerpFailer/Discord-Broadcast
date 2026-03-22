@@ -8,6 +8,7 @@ module.exports = {
     alreadyRunning: "⚠️ Broadcast already running. Use `/stop` first.",
     success:        "✅ **Broadcast started!**\n\n🎧 Source: {{source}}\n📢 Relays connected: **{{count}}/{{total}}**",
     successWarning: "\n⚠️ {{failed}} relay(s) failed — check the logs",
+    partial:        "\n📦 _{{count}}/{{total}} relay(s) started_",
     hint:           "_Speak in the source channel to be heard everywhere._",
     error:          "❌ Failed to start: {{error}}",
   },
