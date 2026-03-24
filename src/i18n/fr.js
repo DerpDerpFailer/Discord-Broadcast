@@ -11,6 +11,8 @@ module.exports = {
     partial:        "\n📦 _{{count}}/{{total}} relay(s) démarrés_",
     hint:           "_Parlez dans le canal source pour être entendu partout._",
     error:          "❌ Échec du démarrage : {{error}}",
+    permHeader:     "⚠️ **Permissions manquantes détectées — le broadcast peut ne pas fonctionner :**",
+    permWarning:    "• **{{name}}** : `{{perms}}`",
   },
 
   // ── /stop ───────────────────────────────────────────────────────────────

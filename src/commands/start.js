@@ -39,6 +39,25 @@ module.exports = {
     await interaction.deferReply();
     logger.info("Commande start reçue", { user: interaction.user.tag, bots: count, total });
 
+    // ── Vérification des permissions (pré-vol) ────────────────────────────
+    const permChecks = await Promise.all(
+      bots.map(async (bot) => ({
+        bot,
+        missing: await bot.checkPermissions(),
+      }))
+    );
+
+    const permIssues = permChecks.filter((c) => c.missing.length > 0);
+    if (permIssues.length > 0) {
+      const lines = permIssues.map((c) =>
+        t("start.permWarning", { name: c.bot.name, perms: c.missing.join(", ") })
+      );
+      await interaction.followUp({
+        content: t("start.permHeader") + "\n" + lines.join("\n"),
+        ephemeral: true,
+      });
+    }
+
     try {
       await masterBot.startBroadcast();
 

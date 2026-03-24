@@ -11,7 +11,7 @@
  * - S'enregistre auprès du dispatcher UNIQUEMENT quand la connexion est Ready
  */
 
-const { Client, GatewayIntentBits } = require("discord.js");
+const { Client, GatewayIntentBits, PermissionFlagsBits } = require("discord.js");
 const {
   joinVoiceChannel,
   createAudioPlayer,
@@ -289,6 +289,36 @@ class RelayBot {
     if (this.client) {
       await this.client.destroy();
       this.client = null;
+    }
+  }
+
+  // ── Permissions ───────────────────────────────────────────────────────────
+
+  /**
+   * Vérifie que le bot a les permissions nécessaires sur son canal cible.
+   * @returns {Promise<string[]>} Liste des permissions manquantes (vide = OK)
+   */
+  async checkPermissions() {
+    try {
+      const guild   = await this.client.guilds.fetch(this.guildId);
+      const channel = await guild.channels.fetch(this.channelId);
+      const me      = guild.members.cache.get(this.client.user.id)
+                      ?? await guild.members.fetch(this.client.user.id);
+      const perms   = channel.permissionsFor(me);
+
+      const required = {
+        ViewChannel: PermissionFlagsBits.ViewChannel,
+        Connect:     PermissionFlagsBits.Connect,
+        Speak:       PermissionFlagsBits.Speak,
+        UseVAD:      PermissionFlagsBits.UseVAD,
+      };
+
+      return Object.entries(required)
+        .filter(([, flag]) => !perms.has(flag))
+        .map(([name]) => name);
+    } catch (err) {
+      logger.warn(`Impossible de vérifier les permissions`, { name: this.name, error: err.message });
+      return [];
     }
   }
 
