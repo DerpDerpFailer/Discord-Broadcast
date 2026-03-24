@@ -58,7 +58,6 @@ module.exports = {
       );
       await interaction.followUp({
         content: t("start.permHeader") + "\n" + lines.join("\n"),
-        ephemeral: true,
       });
     }
 
