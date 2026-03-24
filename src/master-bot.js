@@ -10,7 +10,7 @@
  *   - Gérer les slash commands (/start /stop /status)
  */
 
-const { Client, GatewayIntentBits, REST, Routes, Collection } = require("discord.js");
+const { Client, GatewayIntentBits, REST, Routes, Collection, PermissionFlagsBits } = require("discord.js");
 const {
   joinVoiceChannel,
   VoiceConnectionStatus,
@@ -543,6 +543,35 @@ class MasterBot {
       } else {
         await interaction.reply(msg).catch(() => {});
       }
+    }
+  }
+
+  // ── Permissions ───────────────────────────────────────────────────────────
+
+  /**
+   * Vérifie que le master bot a les permissions nécessaires sur le canal source.
+   * @returns {Promise<string[]>} Liste des permissions manquantes (vide = OK)
+   */
+  async checkPermissions() {
+    try {
+      const guild   = await this.client.guilds.fetch(config.guildId);
+      const channel = await guild.channels.fetch(config.sourceChannelId);
+      const me      = guild.members.cache.get(this.client.user.id)
+                      ?? await guild.members.fetch(this.client.user.id);
+      const perms   = channel.permissionsFor(me);
+
+      const required = {
+        ViewChannel: PermissionFlagsBits.ViewChannel,
+        Connect:     PermissionFlagsBits.Connect,
+        Speak:       PermissionFlagsBits.Speak,
+      };
+
+      return Object.entries(required)
+        .filter(([, flag]) => !perms.has(flag))
+        .map(([name]) => name);
+    } catch (err) {
+      logger.warn("Impossible de vérifier les permissions du master bot", { error: err.message });
+      return [];
     }
   }
 
