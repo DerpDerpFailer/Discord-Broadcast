@@ -60,7 +60,7 @@ Dans Discord (Mode Développeur activé) :
 1. Portainer → **Stacks** → **Add stack**
 2. Choisir **Repository**
 3. Remplir :
-   - **Name** : `discord-broadcast`
+   - **Name** : donner un nom unique (ex: `discord-broadcast`, `discord-broadcast-2`) — ce nom devient le préfixe du container
    - **Repository URL** : `https://github.com/DerpDerpFailer/Discord-Broadcast`
    - **Branch** : `main`
    - **Compose path** : `docker-compose.yml`
@@ -93,7 +93,7 @@ Dans la section **Environment variables**, ajouter toutes les variables suivante
 | `TARGET_CHANNEL_ID_N` | ID du canal cible du relay N |
 | `RELAY_BOT_NAME_N` | Nom affiché (ex: `Team 1`) |
 
-> ⚠️ Les paires `RELAY_BOT_TOKEN_N` / `TARGET_CHANNEL_ID_N` doivent être **consécutives** et commencer à 1. Le système s'arrête dès qu'il ne trouve plus de paire.
+> ⚠️ Les paires `RELAY_BOT_TOKEN_N` / `TARGET_CHANNEL_ID_N` doivent être **consécutives** et commencer à 1. Le système s'arrête dès qu'il ne trouve plus de paire. Les variables non définies sont simplement ignorées — inutile de définir les 20 si tu n'en as que 8.
 
 #### Variables audio (optionnelles, valeurs par défaut recommandées)
 
@@ -177,9 +177,23 @@ Parler dans le canal source → la voix doit être entendue dans tous les canaux
 1. Créer les nouveaux bots sur le Discord Developer Portal (voir Étape 1)
 2. Les inviter sur le serveur Discord
 3. Ajouter les variables `RELAY_BOT_TOKEN_N`, `TARGET_CHANNEL_ID_N`, `RELAY_BOT_NAME_N` dans Portainer
-4. Si les lignes correspondantes sont commentées dans `docker-compose.yml`, les décommenter, pusher sur GitHub
-5. Portainer → stack → **Update the stack**
-6. Vérifier via `/status` que les nouveaux bots apparaissent
+4. Portainer → stack → **Update the stack**
+5. Vérifier via `/status` que les nouveaux bots apparaissent
+
+> Le `docker-compose.yml` supporte nativement jusqu'à 20 bots. Il n'y a plus rien à décommenter.
+
+---
+
+## Déployer plusieurs instances (multi-serveurs)
+
+Le système supporte plusieurs instances indépendantes sur la même VM, chacune pour un serveur Discord différent.
+
+1. Créer une nouvelle stack dans Portainer avec un **nom différent** (ex: `discord-broadcast-2`)
+2. Pointer vers le même repo GitHub
+3. Définir des variables d'environnement propres à ce serveur (tokens, IDs différents)
+4. Déployer — le container sera nommé automatiquement `discord-broadcast-2_broadcast_1`
+
+Chaque instance a son propre volume `/data` isolé et ses propres commandes slash enregistrées sur son serveur Discord.
 
 ---
 

@@ -6,7 +6,7 @@ Le bot broadcast permet de diffuser la voix des **Shotcallers** en temps réel v
 
 ## 🎭 Qui peut faire quoi ?
 
-🎤 **Shotcaller**
+🎤 **Raid Leader**
 → Voix broadcastée ✅
 → /start /stop /status /mute /volume ✅
 
@@ -17,7 +17,7 @@ Le bot broadcast permet de diffuser la voix des **Shotcallers** en temps réel v
 ⚙️ **Administrateur**
 → /setup ✅
 
-> 💡 Seuls les membres avec le rôle **Shotcaller** sont entendus dans les canaux d'équipe. Un Staff peut gérer le bot mais sa voix ne sera pas diffusée.
+> 💡 Seuls les membres avec le rôle **Raid Leader** sont entendus dans les canaux d'équipe. Un Staff peut gérer le bot mais sa voix ne sera pas diffusée.
 
 ---
 

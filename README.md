@@ -115,6 +115,7 @@ Dans la section **Environment variables** :
 | … | … |
 
 > Les tokens des bots ne peuvent pas être modifiés via `/setup` pour des raisons de sécurité. Tous les autres paramètres sont configurables interactivement.
+> Les variables non définies dans Portainer sont simplement ignorées — définir uniquement les bots dont tu as besoin (N = 1 à 20).
 
 ### 3. Deploy the stack
 
@@ -124,7 +125,7 @@ Cliquez **Deploy the stack**.
 
 Les commandes Discord **persistent indéfiniment** — il suffit de les enregistrer une seule fois, ou après avoir ajouté/modifié une commande.
 
-Portainer → Containers → `discord-broadcast` → **Console** → Connect
+Portainer → Containers → sélectionner le container de la stack → **Console** → Connect
 
 ```bash
 node scripts/register-commands.js
@@ -331,6 +332,16 @@ Les variables d'environnement sont toujours requises au démarrage. `/setup` les
 ---
 
 ## Notes de déploiement
+
+### Plusieurs instances (multi-serveurs)
+
+Le `container_name` a été supprimé du `docker-compose.yml`, ce qui permet de déployer plusieurs stacks depuis le même repo sans conflit. Chaque stack doit avoir un **nom unique dans Portainer** (ex: `discord-broadcast`, `discord-broadcast-2`). Le container sera nommé automatiquement `<nom_stack>_broadcast_1`.
+
+Chaque instance est totalement indépendante avec ses propres variables d'environnement et son propre volume `/data`.
+
+### Vérification des permissions au /start
+
+Au démarrage, le bot vérifie automatiquement que le master bot et tous les relay bots ont les permissions nécessaires sur leurs canaux vocaux (`ViewChannel`, `Connect`, `Speak`, `UseVAD`). Si des permissions manquent, un message d'avertissement est affiché publiquement dans le canal avant le démarrage du broadcast.
 
 ### Réseau
 - `network_mode: host` est requis dans `docker-compose.yml` — ne pas utiliser le bridge Docker

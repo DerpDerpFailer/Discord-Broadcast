@@ -6,7 +6,7 @@ The broadcast bot lets **Shotcallers** speak in real time to all team channels s
 
 ## 🎭 Who can do what?
 
-🎤 **Shotcaller**
+🎤 **Raid Leader**
 → Voice broadcasted ✅
 → /start /stop /status /mute /volume ✅
 
@@ -17,7 +17,7 @@ The broadcast bot lets **Shotcallers** speak in real time to all team channels s
 ⚙️ **Administrator**
 → /setup ✅
 
-> 💡 Only members with the **Shotcaller** role are heard in team channels. Staff members can manage the bot but their voice will not be broadcast.
+> 💡 Only members with the **Raid Leader** role are heard in team channels. Staff members can manage the bot but their voice will not be broadcast.
 
 ---
 
@@ -70,9 +70,6 @@ The **🔄 Refresh** button updates the information in real time.
 
 Shows a panel with all bots. Click a number to mute / unmute that team **without stopping the broadcast**.
 
-- 🔊 = team active
-- 🔇 = team muted (connection maintained, the team hears nothing)
-
 ---
 
 ## 🎚️ Adjust volume
@@ -82,10 +79,6 @@ Shows a panel with all bots. Click a number to mute / unmute that team **without
 ```
 
 Shows a panel with the audio level for each team. Click a number to open the volume input:
-
-- `0` = complete silence
-- `100` = normal volume
-- `200` = ×2 boost
 
 ---
 
@@ -103,7 +96,7 @@ Bot configuration (channels, roles, advanced settings) is managed via `/setup` b
 → Check that the volume is not set to 0 (`/volume`)
 
 **I'm speaking but my voice isn't being broadcast**
-→ Check that you have the **Shotcaller** role
+→ Check that you have the **Raid Leader** role
 → Make sure you're speaking in the correct source channel
 
 **The bot disappeared from the channel**
