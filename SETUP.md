@@ -117,7 +117,7 @@ Vérifier dans Portainer → Containers que `discord-broadcast` est **healthy** 
 
 Cette étape est à faire **une seule fois** après le premier déploiement, et à répéter uniquement si des commandes sont ajoutées ou modifiées.
 
-Portainer → **Containers** → `discord-broadcast` → **Console** → **Connect**
+Portainer → **Containers** → sélectionner le container de la stack (nommé `<nom_stack>_broadcast_1`) → **Console** → **Connect**
 
 ```bash
 node scripts/register-commands.js

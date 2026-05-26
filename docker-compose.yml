@@ -8,10 +8,11 @@ version: "3.8"
 #
 # Déploiement Portainer :
 #   1. Stacks → Add stack → Repository → URL de ce repo
-#   2. Ajouter toutes les variables ci-dessous dans "Environment variables"
-#   3. Deploy the stack
-#   4. Enregistrer les commandes slash une seule fois :
-#        Containers → discord-broadcast → Console → node scripts/register-commands.js
+#   2. Donner un nom unique à la stack (ex: discord-broadcast, discord-broadcast-2)
+#   3. Ajouter toutes les variables ci-dessous dans "Environment variables"
+#   4. Deploy the stack
+#   5. Enregistrer les commandes slash une seule fois :
+#        Containers → <nom_stack>_broadcast_1 → Console → node scripts/register-commands.js
 # =============================================================================
 
 services:
@@ -20,7 +21,7 @@ services:
       context: .
       dockerfile: Dockerfile
     image: discord-broadcast:latest
-    container_name: discord-broadcast
+    # container_name supprimé intentionnellement pour permettre plusieurs instances
     restart: unless-stopped
 
     # Limites ressources (VM 2vCPU / 2GB RAM)
@@ -93,22 +94,6 @@ services:
       - TARGET_CHANNEL_ID_8=${TARGET_CHANNEL_ID_8:-}
       - RELAY_BOT_NAME_8=${RELAY_BOT_NAME_8:-Team 8}
 
-      - RELAY_BOT_TOKEN_9=${RELAY_BOT_TOKEN_9:-}
-      - TARGET_CHANNEL_ID_9=${TARGET_CHANNEL_ID_9:-}
-      - RELAY_BOT_NAME_9=${RELAY_BOT_NAME_9:-Team 9}
-
-      - RELAY_BOT_TOKEN_10=${RELAY_BOT_TOKEN_10:-}
-      - TARGET_CHANNEL_ID_10=${TARGET_CHANNEL_ID_10:-}
-      - RELAY_BOT_NAME_10=${RELAY_BOT_NAME_10:-Team 10}
-
-      - RELAY_BOT_TOKEN_11=${RELAY_BOT_TOKEN_11:-}
-      - TARGET_CHANNEL_ID_11=${TARGET_CHANNEL_ID_11:-}
-      - RELAY_BOT_NAME_11=${RELAY_BOT_NAME_11:-Team 11}
-
-      - RELAY_BOT_TOKEN_12=${RELAY_BOT_TOKEN_12:-}
-      - TARGET_CHANNEL_ID_12=${TARGET_CHANNEL_ID_12:-}
-      - RELAY_BOT_NAME_12=${RELAY_BOT_NAME_12:-Team 12}
-      
       # Pour 9 à 20 bots, décommentez et complétez :
       # - RELAY_BOT_TOKEN_9=${RELAY_BOT_TOKEN_9:-}
       # - TARGET_CHANNEL_ID_9=${TARGET_CHANNEL_ID_9:-}
@@ -131,6 +116,12 @@ services:
 
       # Délai silence avant d'arrêter de tracker un speaker (ms)
       - SILENCE_THRESHOLD_MS=${SILENCE_THRESHOLD_MS:-150}
+
+      # Watchdog : redémarre le pipeline si bloqué X ms avec speaker actif (0 = désactivé)
+      - WATCHDOG_THRESHOLD_MS=${WATCHDOG_THRESHOLD_MS:-5000}
+
+      # Auto-disconnect : arrête le broadcast si inactif X ms (0 = désactivé, défaut 10min)
+      - AUTO_DISCONNECT_MS=${AUTO_DISCONNECT_MS:-600000}
 
       # ── LOGS ────────────────────────────────────────────────────────────────
       # Niveaux : error | warn | info | debug
