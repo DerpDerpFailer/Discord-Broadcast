@@ -12,7 +12,12 @@ version: "3.8"
 #   3. Ajouter toutes les variables ci-dessous dans "Environment variables"
 #   4. Deploy the stack
 #   5. Enregistrer les commandes slash une seule fois :
-#        Containers → <nom_stack>_broadcast_1 → Console → node scripts/register-commands.js
+#        Containers → <nom_conteneur> → Console → node scripts/register-commands.js
+#
+# Multi-instance (Unraid) : une stack par instance, avec
+#   BROADCAST_INSTANCE   nom court (ex: tsunami) → container shotcaller-<instance>-bot + icône
+#   BROADCAST_DATA_PATH  dossier hôte pour /data (défaut : volume nommé broadcast_data)
+#   BOT_REPLICAS         0 = stack déployée sans bot (un seul bot par token !), 1 = actif
 # =============================================================================
 
 services:
@@ -20,12 +25,16 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: discord-broadcast:latest
-    # container_name supprimé intentionnellement pour permettre plusieurs instances
+    # No fixed image tag: compose names it <project>-broadcast, so two stacks on
+    # the same host never overwrite each other's image.
+    container_name: shotcaller-${BROADCAST_INSTANCE:-broadcast}-bot
     restart: unless-stopped
+    labels:
+      net.unraid.docker.icon: "https://cdn.jsdelivr.net/gh/DerpDerpFailer/Discord-Broadcast@main/icon/shotcaller-${BROADCAST_INSTANCE:-tsunami}-256.png"
 
     # Limites ressources (VM 2vCPU / 2GB RAM)
     deploy:
+      replicas: ${BOT_REPLICAS:-1}
       resources:
         limits:
           cpus: "1.5"
@@ -36,6 +45,11 @@ services:
 
     # Réseau host = latence UDP optimale pour Discord voice
     network_mode: host
+
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
 
     environment:
       # ── OBLIGATOIRES ────────────────────────────────────────────────────────
@@ -171,7 +185,7 @@ services:
       - LOG_LEVEL=${LOG_LEVEL:-info}
 
     volumes:
-      - broadcast_data:/data
+      - ${BROADCAST_DATA_PATH:-broadcast_data}:/data
 
     dns:
       - 1.1.1.1

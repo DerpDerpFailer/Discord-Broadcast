@@ -1,5 +1,6 @@
 # ── Build stage ──────────────────────────────────────────────────────────────
-FROM node:20-bookworm-slim AS builder
+# Pinned to the exact Node version that ran on the arm64 VM (Node 22 upgrade: later)
+FROM node:20.20.2-bookworm-slim AS builder
 
 WORKDIR /app
 
@@ -16,13 +17,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy package files first (layer cache optimisation)
-COPY package.json ./
+COPY package.json package-lock.json ./
 
-# Install all dependencies including native addons
-RUN npm install --include=optional
+# Reproducible install from the lockfile (versions identical to the VM build)
+RUN npm ci --include=optional --no-audit --no-fund
 
 # ── Runtime stage ─────────────────────────────────────────────────────────────
-FROM node:20-bookworm-slim
+FROM node:20.20.2-bookworm-slim
 
 WORKDIR /app
 
@@ -42,8 +43,9 @@ COPY src/                  ./src/
 COPY scripts/              ./scripts/
 COPY docker-entrypoint.sh  ./docker-entrypoint.sh
 
-# Run as non-root user
-RUN groupadd -r discord && useradd -r -g discord discord
+# Run as non-root user, fixed UID/GID 999 (same as the historical implicit value,
+# so existing /data volumes keep their ownership)
+RUN groupadd -r -g 999 discord && useradd -r -u 999 -g discord discord
 
 # Créer /data et donner les droits à l'utilisateur discord
 RUN mkdir -p /data && chown discord:discord /data

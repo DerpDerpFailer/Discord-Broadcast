@@ -1,0 +1,10 @@
+.git
+.gitignore
+node_modules
+icon
+tests
+*.md
+LICENSE
+.DS_Store
+.env
+scripts/restore-*
