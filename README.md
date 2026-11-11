@@ -333,11 +333,23 @@ Les variables d'environnement sont toujours requises au démarrage. `/setup` les
 
 ## Notes de déploiement
 
-### Plusieurs instances (multi-serveurs)
+### Plusieurs instances (multi-serveurs) / Unraid
 
-Le `container_name` a été supprimé du `docker-compose.yml`, ce qui permet de déployer plusieurs stacks depuis le même repo sans conflit. Chaque stack doit avoir un **nom unique dans Portainer** (ex: `discord-broadcast`, `discord-broadcast-2`). Le container sera nommé automatiquement `<nom_stack>_broadcast_1`.
+Une stack Portainer par instance, depuis le même repo, chacune avec un **nom unique** et ses propres variables. Trois variables pilotent l'instance :
 
-Chaque instance est totalement indépendante avec ses propres variables d'environnement et son propre volume `/data`.
+| Variable | Rôle | Défaut |
+|---|---|---|
+| `BROADCAST_INSTANCE` | Nom court de l'instance → conteneur `shotcaller-<instance>-bot` + icône Unraid `icon/shotcaller-<instance>-256.png` | `broadcast` (icône `tsunami`) |
+| `BROADCAST_DATA_PATH` | Dossier hôte monté sur `/data` (ex. `/mnt/user/appdata/shotcaller-tsunami-bot/data`, propriétaire `999:999`) | volume nommé `broadcast_data` |
+| `BOT_REPLICAS` | `0` = stack déployée sans bot, `1` = bot actif. **Jamais deux bots sur les mêmes tokens.** | `1` |
+
+L'image n'a pas de tag fixe : Compose la nomme `<nom_stack>-broadcast`, donc deux stacks sur le même hôte ne s'écrasent pas. Dépendances figées (`package-lock.json`, `npm ci`, Node `20.20.2`), conteneur en UID/GID `999` avec `cap_drop: [ALL]` et `no-new-privileges`.
+
+Déploiement Unraid actuel : stacks `shotcaller-tsunami-bot` et `shotcaller-alliance-bot`. Restauration des données depuis Appdata Backup (dry-run par défaut) :
+
+```bash
+ssh root@192.168.1.240 'bash -s -- --instance tsunami' < scripts/restore-shotcaller-data-unraid.sh
+```
 
 ### Vérification des permissions au /start
 
